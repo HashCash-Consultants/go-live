@@ -44,8 +44,9 @@ $ dep version
 
 - mkdir github.com/hcnet in /home/ubuntu/go/src
 - go to /home/ubuntu/go/src/github.com/hcnet and execute following command:
-- git clone https://github.com/HashCash-Consultants/go.git
-- go to /home/ubuntu/go/src/github.com/hcnet /go and execute following command:
+- git clone https://github.com/HashCash-Consultants/go-live.git
+- go to /home/ubuntu/go/src/github.com/hcnet/ and change directory name go-live to go
+- go to /home/ubuntu/go/src/github.com/hcnet/go and execute following command:
 ```
 $ sudo apt-get install mercurial
 ```
