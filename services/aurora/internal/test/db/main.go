@@ -41,8 +41,8 @@ func AuroraURL() string {
 	return *auroraUrl
 }
 
-// HcnetCore returns a connection to the hcnet core test database
-func HcnetCore(t *testing.T) *sqlx.DB {
+// HcNetCore returns a connection to the hcnet core test database
+func HcNetCore(t *testing.T) *sqlx.DB {
 	if coreDB != nil {
 		return coreDB
 	}
@@ -52,11 +52,11 @@ func HcnetCore(t *testing.T) *sqlx.DB {
 	return coreDB
 }
 
-// HcnetCoreURL returns the database connection the url any test
+// HcNetCoreURL returns the database connection the url any test
 // use when connecting to the hcnet-core database
-func HcnetCoreURL() string {
+func HcNetCoreURL() string {
 	if coreUrl == nil {
-		log.Panic(fmt.Errorf("HcnetCore not initialized"))
+		log.Panic(fmt.Errorf("HcNetCore not initialized"))
 	}
 	return *coreUrl
 }

@@ -8,6 +8,8 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/guregu/null"
+
+	"github.com/hcnet/go/services/aurora/internal/db2"
 	"github.com/hcnet/go/support/db"
 	"github.com/hcnet/go/xdr"
 )
@@ -106,6 +108,13 @@ const (
 
 )
 
+// ExperimentalIngestionTables is a list of tables populated by the experimental
+// ingestion system
+var ExperimentalIngestionTables = []string{
+	"accounts_signers",
+	"offers",
+}
+
 // Account is a row of data from the `history_accounts` table
 type Account struct {
 	ID      int64
@@ -118,6 +127,13 @@ type AccountsQ struct {
 	Err    error
 	parent *Q
 	sql    sq.SelectBuilder
+}
+
+// AccountSigner is a row of data from the `accounts_signers` table
+type AccountSigner struct {
+	Account string `db:"account"`
+	Signer  string `db:"signer"`
+	Weight  int32  `db:"weight"`
 }
 
 // Asset is a row of data from the `history_assets` table
@@ -145,6 +161,12 @@ type Effect struct {
 	Order              int32       `db:"order"`
 	Type               EffectType  `db:"type"`
 	DetailsString      null.String `db:"details"`
+}
+
+// SequenceBumped is a struct of data from `effects.DetailsString`
+// when the effect type is sequence bumped.
+type SequenceBumped struct {
+	NewSeq int64 `json:"new_seq"`
 }
 
 // EffectsQ is a helper struct to aid in configuring queries that loads
@@ -175,6 +197,12 @@ type FeeStats struct {
 	P90  null.Int `db:"p90"`
 	P95  null.Int `db:"p95"`
 	P99  null.Int `db:"p99"`
+}
+
+// KeyValueStoreRow represents a row in key value store.
+type KeyValueStoreRow struct {
+	Key   string `db:"key"`
+	Value string `db:"value"`
 }
 
 // LatestLedger represents a response from the raw LatestLedgerBaseFeeAndSequence
@@ -234,6 +262,7 @@ type Operation struct {
 	TotalOrderID
 	TransactionID    int64             `db:"transaction_id"`
 	TransactionHash  string            `db:"transaction_hash"`
+	TxResult         string            `db:"tx_result"`
 	ApplicationOrder int32             `db:"application_order"`
 	Type             xdr.OperationType `db:"type"`
 	DetailsString    null.String       `db:"details"`
@@ -242,21 +271,54 @@ type Operation struct {
 	TransactionSuccessful *bool `db:"transaction_successful"`
 }
 
+// Offer is row of data from the `offers` table from hcnet-core
+type Offer struct {
+	SellerID string    `db:"sellerid"`
+	OfferID  xdr.Int64 `db:"offerid"`
+
+	SellingAsset xdr.Asset `db:"sellingasset"`
+	BuyingAsset  xdr.Asset `db:"buyingasset"`
+
+	Amount             xdr.Int64 `db:"amount"`
+	Pricen             int32     `db:"pricen"`
+	Priced             int32     `db:"priced"`
+	Price              float64   `db:"price"`
+	Flags              uint32    `db:"flags"`
+	LastModifiedLedger uint32    `db:"last_modified_ledger"`
+}
+
 // OperationsQ is a helper struct to aid in configuring queries that loads
 // slices of Operation structs.
-// WARNING: returns successful and failed operations! Use `SuccessfulOnly`
-// to return successful transactions only.
 type OperationsQ struct {
-	Err     error
-	parent  *Q
-	sql     sq.SelectBuilder
-	opIdCol string
+	Err                 error
+	parent              *Q
+	sql                 sq.SelectBuilder
+	opIdCol             string
+	includeFailed       bool
+	includeTransactions bool
 }
 
 // Q is a helper struct on which to hang common_trades queries against a history
 // portion of the aurora database.
 type Q struct {
 	*db.Session
+}
+
+// QSigners defines signer related queries.
+type QSigners interface {
+	GetLastLedgerExpIngestNonBlocking() (uint32, error)
+	GetLastLedgerExpIngest() (uint32, error)
+	UpdateLastLedgerExpIngest(ledgerSequence uint32) error
+	AccountsForSigner(signer string, page db2.PageQuery) ([]AccountSigner, error)
+	CreateAccountSigner(account, signer string, weight int32) error
+	RemoveAccountSigner(account, signer string) error
+}
+
+// QOffers defines offer related queries.
+type QOffers interface {
+	GetAllOffers() ([]Offer, error)
+	UpsertOffer(offer xdr.OfferEntry, lastModifiedLedger xdr.Uint32) error
+	RemoveOffer(offerID xdr.Int64) error
 }
 
 // TotalOrderID represents the ID portion of rows that are identified by the
@@ -306,7 +368,8 @@ type Transaction struct {
 	ApplicationOrder int32       `db:"application_order"`
 	Account          string      `db:"account"`
 	AccountSequence  string      `db:"account_sequence"`
-	FeePaid          int32       `db:"fee_paid"`
+	MaxFee           int32       `db:"max_fee"`
+	FeeCharged       int32       `db:"fee_charged"`
 	OperationCount   int32       `db:"operation_count"`
 	TxEnvelope       string      `db:"tx_envelope"`
 	TxResult         string      `db:"tx_result"`
@@ -329,12 +392,11 @@ type Transaction struct {
 
 // TransactionsQ is a helper struct to aid in configuring queries that loads
 // slices of transaction structs.
-// WARNING: returns successful and failed transactions! Use `SuccessfulOnly`
-// to return successful transactions only.
 type TransactionsQ struct {
-	Err    error
-	parent *Q
-	sql    sq.SelectBuilder
+	Err           error
+	parent        *Q
+	sql           sq.SelectBuilder
+	includeFailed bool
 }
 
 // ElderLedger loads the oldest ledger known to the history database

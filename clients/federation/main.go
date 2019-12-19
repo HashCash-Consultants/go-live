@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/hcnet/go/clients/aurora"
+	hc "github.com/hcnet/go/clients/auroraclient"
 	"github.com/hcnet/go/clients/hcnettoml"
 	proto "github.com/hcnet/go/protocols/federation"
 )
@@ -15,21 +15,21 @@ const FederationResponseMaxSize = 100 * 1024
 // DefaultTestNetClient is a default federation client for testnet
 var DefaultTestNetClient = &Client{
 	HTTP:        http.DefaultClient,
-	Aurora:     aurora.DefaultTestNetClient,
-	HcnetTOML: hcnettoml.DefaultClient,
+	Aurora:     hc.DefaultTestNetClient,
+	HcNetTOML: hcnettoml.DefaultClient,
 }
 
 // DefaultPublicNetClient is a default federation client for pubnet
 var DefaultPublicNetClient = &Client{
 	HTTP:        http.DefaultClient,
-	Aurora:     aurora.DefaultPublicNetClient,
-	HcnetTOML: hcnettoml.DefaultClient,
+	Aurora:     hc.DefaultPublicNetClient,
+	HcNetTOML: hcnettoml.DefaultClient,
 }
 
 // Client represents a client that is capable of resolving a federation request
 // using the internet.
 type Client struct {
-	HcnetTOML HcnetTOML
+	HcNetTOML HcNetTOML
 	HTTP        HTTP
 	Aurora     Aurora
 	AllowHTTP   bool
@@ -53,14 +53,14 @@ type HTTP interface {
 	Get(url string) (*http.Response, error)
 }
 
-// HcnetTOML represents a client that can resolve a given domain name to
+// HcNetTOML represents a client that can resolve a given domain name to
 // hcnet.toml file.  The response is used to find the federation server that a
 // query should be made against.
-type HcnetTOML interface {
-	GetHcnetToml(domain string) (*hcnettoml.Response, error)
+type HcNetTOML interface {
+	GetHcNetToml(domain string) (*hcnettoml.Response, error)
 }
 
 // confirm interface conformity
-var _ HcnetTOML = hcnettoml.DefaultClient
+var _ HcNetTOML = hcnettoml.DefaultClient
 var _ HTTP = http.DefaultClient
 var _ ClientInterface = &Client{}

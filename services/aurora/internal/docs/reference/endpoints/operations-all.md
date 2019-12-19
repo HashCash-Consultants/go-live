@@ -7,13 +7,13 @@ clientData:
 This endpoint represents [operations](../resources/operation.md) that are part of successfully validated [transactions](../resources/transaction.md).
 Please note that this endpoint returns operations that are part of failed transactions if `include_failed` parameter is `true`
 and Aurora is ingesting failed transactions.
-This endpoint can also be used in [streaming](../streaming.md) mode so it is possible to use it to listen as operations are processed in the Hcnet network.
+This endpoint can also be used in [streaming](../streaming.md) mode so it is possible to use it to listen as operations are processed in the HcNet network.
 If called in streaming mode Aurora will start at the earliest known operation unless a `cursor` is set. In that case it will start from the `cursor`. You can also set `cursor` value to `now` to only stream operations created since your request time.
 
 ## Request
 
 ```
-GET /operations{?cursor,limit,order}
+GET /operations{?cursor,limit,order,include_failed}
 ```
 
 ### Arguments
@@ -24,6 +24,7 @@ GET /operations{?cursor,limit,order}
 | `?order`  | optional, string, default `asc` | The order in which to return rows, "asc" or "desc". | `asc` |
 | `?limit`  | optional, number, default: `10` | Maximum number of records to return. | `200` |
 | `?include_failed` | optional, bool, default: `false` | Set to `true` to include operations of failed transactions in results. | `true` |
+| `?join` | optional, string, default: _null_ | Set to `transactions` to include the transactions which created each of the operations in the response. | `transactions` |
 
 ### curl Example Request
 
@@ -34,8 +35,8 @@ curl "https://aurora-testnet.hcnet.org/operations?limit=200&order=desc"
 ### JavaScript Example Request
 
 ```js
-var HcnetSdk = require('hcnet-sdk');
-var server = new HcnetSdk.Server('https://aurora-testnet.hcnet.org');
+var HcNetSdk = require('hcnet-sdk');
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
 
 server.operations()
   .call()
@@ -50,6 +51,23 @@ server.operations()
   })
   .catch(function (err) {
     console.log(err)
+  })
+```
+
+### JavaScript Streaming Example
+
+```javascript
+var HcNetSdk = require('hcnet-sdk')
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
+
+var operationHandler = function (operationResponse) {
+  console.log(operationResponse);
+};
+
+var es = server.operations()
+  .cursor('now')
+  .stream({
+    onmessage: operationHandler
   })
 ```
 

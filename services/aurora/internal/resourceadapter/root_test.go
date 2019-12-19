@@ -26,7 +26,7 @@ func TestPopulateRoot(t *testing.T) {
 	assert.Equal(t, int32(2), res.HistoryElderSequence)
 	assert.Equal(t, int32(3), res.AuroraSequence)
 	assert.Equal(t, "hVersion", res.AuroraVersion)
-	assert.Equal(t, "cVersion", res.HcnetCoreVersion)
+	assert.Equal(t, "cVersion", res.HcNetCoreVersion)
 	assert.Equal(t, "passphrase", res.NetworkPassphrase)
 	assert.Equal(t, "https://friendbot.example.com/{?addr}", res.Links.Friendbot.Href)
 
@@ -46,7 +46,7 @@ func TestPopulateRoot(t *testing.T) {
 	assert.Equal(t, int32(2), res.HistoryElderSequence)
 	assert.Equal(t, int32(3), res.AuroraSequence)
 	assert.Equal(t, "hVersion", res.AuroraVersion)
-	assert.Equal(t, "cVersion", res.HcnetCoreVersion)
+	assert.Equal(t, "cVersion", res.HcNetCoreVersion)
 	assert.Equal(t, "passphrase", res.NetworkPassphrase)
 	assert.Empty(t, res.Links.Friendbot)
 }

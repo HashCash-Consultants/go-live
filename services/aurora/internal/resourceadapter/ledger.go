@@ -5,14 +5,14 @@ import (
 	"fmt"
 
 	"github.com/hcnet/go/amount"
-	. "github.com/hcnet/go/protocols/aurora"
+	protocol "github.com/hcnet/go/protocols/aurora"
 	"github.com/hcnet/go/services/aurora/internal/db2/history"
 	"github.com/hcnet/go/services/aurora/internal/httpx"
 	"github.com/hcnet/go/support/render/hal"
 	"github.com/hcnet/go/xdr"
 )
 
-func PopulateLedger(ctx context.Context, dest *Ledger, row history.Ledger) {
+func PopulateLedger(ctx context.Context, dest *protocol.Ledger, row history.Ledger) {
 	dest.ID = row.LedgerHash
 	dest.PT = row.PagingToken()
 	dest.Hash = row.LedgerHash
@@ -46,6 +46,4 @@ func PopulateLedger(ctx context.Context, dest *Ledger, row history.Ledger) {
 	dest.Links.Operations = lb.PagedLink(self, "operations")
 	dest.Links.Payments = lb.PagedLink(self, "payments")
 	dest.Links.Effects = lb.PagedLink(self, "effects")
-
-	return
 }

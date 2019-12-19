@@ -6,7 +6,7 @@ clientData:
 
 This endpoint represents all [trades](../resources/trade.md) that affect a given [account](../resources/account.md).
 
-This endpoint can also be used in [streaming](../streaming.md) mode, making it possible to listen for new trades that affect the given account as they occur on the Hcnet network.
+This endpoint can also be used in [streaming](../streaming.md) mode, making it possible to listen for new trades that affect the given account as they occur on the HcNet network.
 If called in streaming mode Aurora will start at the earliest known trade unless a `cursor` is set. In that case it will start from the `cursor`. You can also set `cursor` value to `now` to only stream trades created since your request time.
 
 ## Request
@@ -32,12 +32,12 @@ curl "https://aurora-testnet.hcnet.org/accounts/GBYTR4MC5JAX4ALGUBJD7EIKZVM7CUGW
 
 ### JavaScript Example Request
 
-```js
-var HcnetSdk = require('hcnet-sdk');
-var server = new HcnetSdk.Server('https://aurora-testnet.hcnet.org');
+```javascript
+var HcNetSdk = require('hcnet-sdk');
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
 
 server.trades()
-  .forAccount("GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGSNFHEYVXM3XOJMDS674JZ")
+  .forAccount("GBYTR4MC5JAX4ALGUBJD7EIKZVM7CUGWKXIUJMRSMK573XH2O7VAK3SR")
   .call()
   .then(function (accountResult) {
     console.log(accountResult);

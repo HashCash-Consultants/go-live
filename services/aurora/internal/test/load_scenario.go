@@ -12,6 +12,6 @@ func loadScenario(scenarioName string, includeAurora bool) {
 		auroraPath = "blank-aurora.sql"
 	}
 
-	scenarios.Load(HcnetCoreDatabaseURL(), hcnetCorePath)
+	scenarios.Load(HcNetCoreDatabaseURL(), hcnetCorePath)
 	scenarios.Load(DatabaseURL(), auroraPath)
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hcnet/go/amount"
-	. "github.com/hcnet/go/protocols/aurora"
+	protocol "github.com/hcnet/go/protocols/aurora"
 	"github.com/hcnet/go/services/aurora/internal/db2/history"
 	"github.com/hcnet/go/services/aurora/internal/httpx"
 	"github.com/hcnet/go/support/render/hal"
@@ -15,7 +15,7 @@ import (
 // table.
 func PopulateTrade(
 	ctx context.Context,
-	dest *Trade,
+	dest *protocol.Trade,
 	row history.Trade,
 ) {
 	dest.ID = row.PagingToken()
@@ -43,7 +43,7 @@ func PopulateTrade(
 	dest.BaseIsSeller = row.BaseIsSeller
 
 	if row.HasPrice() {
-		dest.Price = &Price{
+		dest.Price = &protocol.Price{
 			N: int32(row.PriceN.Int64),
 			D: int32(row.PriceD.Int64),
 		}
@@ -54,7 +54,7 @@ func PopulateTrade(
 
 func populateTradeLinks(
 	ctx context.Context,
-	dest *Trade,
+	dest *protocol.Trade,
 	opid int64,
 ) {
 	lb := hal.LinkBuilder{httpx.BaseURL(ctx)}

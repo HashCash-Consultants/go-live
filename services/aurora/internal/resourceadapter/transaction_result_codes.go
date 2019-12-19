@@ -3,13 +3,13 @@ package resourceadapter
 import (
 	"context"
 
-	. "github.com/hcnet/go/protocols/aurora"
+	protocol "github.com/hcnet/go/protocols/aurora"
 	"github.com/hcnet/go/services/aurora/internal/txsub"
 )
 
 // Populate fills out the details
 func PopulateTransactionResultCodes(ctx context.Context,
-	dest *TransactionResultCodes,
+	dest *protocol.TransactionResultCodes,
 	fail *txsub.FailedTransactionError,
 ) (err error) {
 

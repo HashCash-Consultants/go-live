@@ -1,21 +1,33 @@
-// Copyright 2015 Hcnet Development Foundation and contributors. Licensed
+// Copyright 2015 HcNet Development Foundation and contributors. Licensed
 // under the Apache License, Version 2.0. See the COPYING file at the root
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
-%#include "xdr/Hcnet-SCP.h"
-%#include "xdr/Hcnet-transaction.h"
+%#include "xdr/HcNet-SCP.h"
+%#include "xdr/HcNet-transaction.h"
 
 namespace hcnet
 {
 
 typedef opaque UpgradeType<128>;
 
-/* HcnetValue is the value used by SCP to reach consensus on a given ledger
-*/
-struct HcnetValue
+enum HcNetValueType
 {
-    Hash txSetHash;   // transaction set to apply to previous ledger
-    uint64 closeTime; // network close time
+    HCNET_VALUE_BASIC = 0,
+    HCNET_VALUE_SIGNED = 1
+};
+
+struct LedgerCloseValueSignature
+{
+    NodeID nodeID;       // which node introduced the value
+    Signature signature; // nodeID's signature
+};
+
+/* HcNetValue is the value used by SCP to reach consensus on a given ledger
+ */
+struct HcNetValue
+{
+    Hash txSetHash;      // transaction set to apply to previous ledger
+    TimePoint closeTime; // network close time
 
     // upgrades to apply to the previous ledger (usually empty)
     // this is a vector of encoded 'LedgerUpgrade' so that nodes can drop
@@ -27,20 +39,22 @@ struct HcnetValue
     // reserved for future use
     union switch (int v)
     {
-    case 0:
+    case HCNET_VALUE_BASIC:
         void;
+    case HCNET_VALUE_SIGNED:
+        LedgerCloseValueSignature lcValueSignature;
     }
     ext;
 };
 
 /* The LedgerHeader is the highest level structure representing the
  * state of a ledger, cryptographically linked to previous ledgers.
-*/
+ */
 struct LedgerHeader
 {
     uint32 ledgerVersion;    // the protocol version of the ledger
     Hash previousLedgerHash; // hash of the previous ledger header
-    HcnetValue scpValue;   // what consensus agreed to
+    HcNetValue scpValue;   // what consensus agreed to
     Hash txSetResultHash;    // the TransactionResultSet that led to this ledger
     Hash bucketListHash;     // hash of the ledger state
 
@@ -75,7 +89,7 @@ struct LedgerHeader
 };
 
 /* Ledger upgrades
-note that the `upgrades` field from HcnetValue is normalized such that
+note that the `upgrades` field from HcNetValue is normalized such that
 it only contains one entry per LedgerUpgradeType, and entries are sorted
 in ascending order
 */
@@ -120,7 +134,7 @@ case OFFER:
     struct
     {
         AccountID sellerID;
-        uint64 offerID;
+        int64 offerID;
     } offer;
 
 case DATA:
@@ -133,17 +147,38 @@ case DATA:
 
 enum BucketEntryType
 {
-    LIVEENTRY = 0,
-    DEADENTRY = 1
+    METAENTRY =
+        -1, // At-and-after protocol 11: bucket metadata, should come first.
+    LIVEENTRY = 0, // Before protocol 11: created-or-updated;
+                   // At-and-after protocol 11: only updated.
+    DEADENTRY = 1,
+    INITENTRY = 2 // At-and-after protocol 11: only created.
+};
+
+struct BucketMetadata
+{
+    // Indicates the protocol version used to create / merge this bucket.
+    uint32 ledgerVersion;
+
+    // reserved for future use
+    union switch (int v)
+    {
+    case 0:
+        void;
+    }
+    ext;
 };
 
 union BucketEntry switch (BucketEntryType type)
 {
 case LIVEENTRY:
+case INITENTRY:
     LedgerEntry liveEntry;
 
 case DEADENTRY:
     LedgerKey deadEntry;
+case METAENTRY:
+    BucketMetadata metaEntry;
 };
 
 // Transaction sets are the unit used by SCP to decide on transitions
@@ -268,7 +303,7 @@ struct OperationMeta
 struct TransactionMetaV1
 {
     LedgerEntryChanges txChanges; // tx level changes if any
-    OperationMeta operations<>; // meta for each operation
+    OperationMeta operations<>;   // meta for each operation
 };
 
 // this is the meta produced when applying transactions

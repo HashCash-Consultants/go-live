@@ -3,14 +3,15 @@ package resourceadapter
 import (
 	"context"
 
-	. "github.com/hcnet/go/protocols/aurora"
+	protocol "github.com/hcnet/go/protocols/aurora"
 	"github.com/hcnet/go/services/aurora/internal/db2/core"
+	"github.com/hcnet/go/support/errors"
 	"github.com/hcnet/go/xdr"
 )
 
 func PopulateOrderBookSummary(
 	ctx context.Context,
-	dest *OrderBookSummary,
+	dest *protocol.OrderBookSummary,
 	selling xdr.Asset,
 	buying xdr.Asset,
 	row core.OrderBookSummary,
@@ -25,24 +26,36 @@ func PopulateOrderBookSummary(
 		return err
 	}
 
-	populatePriceLevels(&dest.Bids, row.Bids())
-	populatePriceLevels(&dest.Asks, row.Asks())
+	err = populatePriceLevels(&dest.Bids, row.Bids())
+	if err != nil {
+		return err
+	}
+	err = populatePriceLevels(&dest.Asks, row.Asks())
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func populatePriceLevels(destp *[]PriceLevel, rows []core.OrderBookSummaryPriceLevel) {
-	*destp = make([]PriceLevel, len(rows))
+func populatePriceLevels(destp *[]protocol.PriceLevel, rows []core.OrderBookSummaryPriceLevel) error {
+	*destp = make([]protocol.PriceLevel, len(rows))
 	dest := *destp
 
 	for i, row := range rows {
-		dest[i] = PriceLevel{
+		amount, err := row.AmountAsString()
+		if err != nil {
+			return errors.Wrap(err, "Error converting PriceLevel.Amount: "+row.Amount)
+		}
+		dest[i] = protocol.PriceLevel{
 			Price:  row.PriceAsString(),
-			Amount: row.AmountAsString(),
-			PriceR: Price{
+			Amount: amount,
+			PriceR: protocol.Price{
 				N: row.Pricen,
 				D: row.Priced,
 			},
 		}
 	}
+
+	return nil
 }

@@ -14,13 +14,13 @@ import (
 )
 
 const (
-	// HcnetAccountPrefix is a prefix for Hcnet key pairs derivation.
-	HcnetAccountPrefix = "m/44'/148'"
-	// HcnetPrimaryAccountPath is a derivation path of the primary account.
-	HcnetPrimaryAccountPath = "m/44'/148'/0'"
-	// HcnetAccountPathFormat is a path format used for Hcnet key pair
+	// HcNetAccountPrefix is a prefix for HcNet key pairs derivation.
+	HcNetAccountPrefix = "m/44'/148'"
+	// HcNetPrimaryAccountPath is a derivation path of the primary account.
+	HcNetPrimaryAccountPath = "m/44'/148'/0'"
+	// HcNetAccountPathFormat is a path format used for HcNet key pair
 	// derivation as described in SEP-00XX. Use with `fmt.Sprintf` and `DeriveForPath`.
-	HcnetAccountPathFormat = "m/44'/148'/%d'"
+	HcNetAccountPathFormat = "m/44'/148'/%d'"
 	// FirstHardenedIndex is the index of the first hardened key.
 	FirstHardenedIndex = uint32(0x80000000)
 	// As in https://github.com/satoshilabs/slips/blob/master/slip-0010.md
@@ -31,7 +31,7 @@ var (
 	ErrInvalidPath        = errors.New("Invalid derivation path")
 	ErrNoPublicDerivation = errors.New("No public derivation for ed25519")
 
-	pathRegex = regexp.MustCompile("^m(\\/[0-9]+')+$")
+	pathRegex = regexp.MustCompile(`^m(\/[0-9]+')+$`)
 )
 
 type Key struct {

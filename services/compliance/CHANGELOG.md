@@ -2,6 +2,16 @@
 
 As this project is pre 1.0, breaking changes may happen for minor version bumps. A breaking change will get clearly notified in this log.
 
+## 0.0.32
+
+* Compliance server now uses the new Go SDK.
+* Unit tests added.
+
+## Breaking changes
+
+* MySQL is no longer supported. To migrate your data to postgresql use any of the tools provided [here](https://wiki.postgresql.org/wiki/Converting_from_other_Databases_to_PostgreSQL#MySQL).
+
+
 ## 0.0.31
 
 ### Breaking changes
@@ -156,7 +166,7 @@ Please migrate your `bridge` DB before running a new version using: `bridge --mi
 
 * Send `create_account` operation in `/payment` if account does not exist.
 * Fixed major bug in `PaymentListener`.
-* Sending to Hcnet address with memo in `/send`.
+* Sending to HcNet address with memo in `/send`.
 * Standardized responses.
 * Updated README file.
 
@@ -167,7 +177,7 @@ Please migrate your `bridge` DB before running a new version using: `bridge --mi
 * Added config parameters validation.
 * Added `network_passphrase` config parameter.
 * `postgres` migration files.
-* Fixed sending to Hcnet address.
+* Fixed sending to HcNet address.
 * Fixed `aurora.AccountResponse.SequenceNumber` bug.
 * Fixed minor bugs.
 * Code refactoring.

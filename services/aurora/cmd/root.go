@@ -5,6 +5,7 @@ import (
 	"go/types"
 	stdLog "log"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -22,13 +23,13 @@ var config aurora.Config
 var rootCmd = &cobra.Command{
 	Use:   "aurora",
 	Short: "client-facing api server for the hcnet network",
-	Long:  "client-facing api server for the hcnet network. It acts as the interface between Hcnet Core and applications that want to access the Hcnet network. It allows you to submit transactions to the network, check the status of accounts, subscribe to event streams and more.",
+	Long:  "client-facing api server for the hcnet network. It acts as the interface between HcNet Core and applications that want to access the HcNet network. It allows you to submit transactions to the network, check the status of accounts, subscribe to event streams and more.",
 	Run: func(cmd *cobra.Command, args []string) {
 		initApp().Serve()
 	},
 }
 
-// validateBothOrNeither ensures that both options are provided, if either is provided
+// validateBothOrNeither ensures that both options are provided, if either is provided.
 func validateBothOrNeither(option1, option2 string) {
 	arg1, arg2 := viper.GetString(option1), viper.GetString(option2)
 	if arg1 != "" && arg2 == "" {
@@ -39,7 +40,7 @@ func validateBothOrNeither(option1, option2 string) {
 	}
 }
 
-// checkMigrations looks for necessary database migrations and fails with a descriptive error if migrations are needed
+// checkMigrations looks for necessary database migrations and fails with a descriptive error if migrations are needed.
 func checkMigrations() {
 	migrationsToApplyUp := schema.GetMigrationsUp(viper.GetString("db-url"))
 	if len(migrationsToApplyUp) > 0 {
@@ -57,7 +58,7 @@ func checkMigrations() {
 	}
 }
 
-// configOpts defines the complete flag configuration for aurora
+// configOpts defines the complete flag configuration for aurora.
 // Add a new entry here to connect a new field in the aurora.Config struct
 var configOpts = []*support.ConfigOption{
 	&support.ConfigOption{
@@ -71,17 +72,31 @@ var configOpts = []*support.ConfigOption{
 	&support.ConfigOption{
 		Name:      "hcnet-core-db-url",
 		EnvVar:    "HCNET_CORE_DATABASE_URL",
-		ConfigKey: &config.HcnetCoreDatabaseURL,
+		ConfigKey: &config.HcNetCoreDatabaseURL,
 		OptType:   types.String,
 		Required:  true,
 		Usage:     "hcnet-core postgres database to connect with",
 	},
 	&support.ConfigOption{
 		Name:      "hcnet-core-url",
-		ConfigKey: &config.HcnetCoreURL,
+		ConfigKey: &config.HcNetCoreURL,
 		OptType:   types.String,
 		Required:  true,
 		Usage:     "hcnet-core to connect with (for http commands)",
+	},
+	&support.ConfigOption{
+		Name:        "history-archive-urls",
+		ConfigKey:   &config.HistoryArchiveURLs,
+		OptType:     types.String,
+		Required:    false,
+		FlagDefault: "",
+		CustomSetValue: func(co *support.ConfigOption) {
+			stringOfUrls := viper.GetString(co.Name)
+			urlStrings := strings.Split(stringOfUrls, ",")
+
+			*(co.ConfigKey.(*[]string)) = urlStrings
+		},
+		Usage: "comma-separated list of hcnet history archives to connect with",
 	},
 	&support.ConfigOption{
 		Name:        "port",
@@ -94,8 +109,36 @@ var configOpts = []*support.ConfigOption{
 		Name:        "max-db-connections",
 		ConfigKey:   &config.MaxDBConnections,
 		OptType:     types.Int,
+		FlagDefault: 0,
+		Usage:       "when set has a priority over aurora-db-max-open-connections, aurora-db-max-idle-connections, core-db-max-open-connections, core-db-max-idle-connections. max aurora database open connections. may need to be increased when responses are slow but DB CPU is normal",
+	},
+	&support.ConfigOption{
+		Name:        "aurora-db-max-open-connections",
+		ConfigKey:   &config.AuroraDBMaxOpenConnections,
+		OptType:     types.Int,
 		FlagDefault: 20,
-		Usage:       "max db connections (per DB), may need to be increased when responses are slow but DB CPU is normal",
+		Usage:       "max aurora database open connections. may need to be increased when responses are slow but DB CPU is normal",
+	},
+	&support.ConfigOption{
+		Name:        "aurora-db-max-idle-connections",
+		ConfigKey:   &config.AuroraDBMaxIdleConnections,
+		OptType:     types.Int,
+		FlagDefault: 20,
+		Usage:       "max aurora database idle connections. may need to be set to the same value as aurora-db-max-open-connections when responses are slow and DB CPU is normal, because it may indicate that a lot of time is spent closing/opening idle connections. This can happen in case of high variance in number of requests. must be equal or lower than max open connections",
+	},
+	&support.ConfigOption{
+		Name:        "core-db-max-open-connections",
+		ConfigKey:   &config.CoreDBMaxOpenConnections,
+		OptType:     types.Int,
+		FlagDefault: 20,
+		Usage:       "max core database open connections. may need to be increased when responses are slow but DB CPU is normal",
+	},
+	&support.ConfigOption{
+		Name:        "core-db-max-idle-connections",
+		ConfigKey:   &config.CoreDBMaxIdleConnections,
+		OptType:     types.Int,
+		FlagDefault: 20,
+		Usage:       "max core database idle connections. may need to be set to the same value as core-db-max-open-connections when responses are slow and DB CPU is normal, because it may indicate that a lot of time is spent closing/opening idle connections. This can happen in case of high variance in number of requests. must be equal or lower than max open connections",
 	},
 	&support.ConfigOption{
 		Name:           "sse-update-frequency",
@@ -115,7 +158,7 @@ var configOpts = []*support.ConfigOption{
 	},
 	&support.ConfigOption{
 		Name:        "per-hour-rate-limit",
-		ConfigKey:   &config.RateLimit,
+		ConfigKey:   &config.RateQuota,
 		OptType:     types.Int,
 		FlagDefault: 3600,
 		CustomSetValue: func(co *support.ConfigOption) {
@@ -230,6 +273,14 @@ var configOpts = []*support.ConfigOption{
 		Usage:       "causes this aurora process to ingest failed transactions data",
 	},
 	&support.ConfigOption{
+		Name:        "cursor-name",
+		EnvVar:      "CURSOR_NAME",
+		ConfigKey:   &config.CursorName,
+		OptType:     types.String,
+		FlagDefault: "HORIZON",
+		Usage:       "ingestor cursor used by aurora to ingest from hcnet core. must be uppercase and unique for each aurora instance ingesting from that core instance.",
+	},
+	&support.ConfigOption{
 		Name:        "history-retention-count",
 		ConfigKey:   &config.HistoryRetentionCount,
 		OptType:     types.Uint,
@@ -256,6 +307,20 @@ var configOpts = []*support.ConfigOption{
 		OptType:     types.Bool,
 		FlagDefault: false,
 		Usage:       "enables asset stats during the ingestion and expose `/assets` endpoint, Enabling it has a negative impact on CPU",
+	},
+	&support.ConfigOption{
+		Name:        "enable-experimental-ingestion",
+		ConfigKey:   &config.EnableExperimentalIngestion,
+		OptType:     types.Bool,
+		FlagDefault: false,
+		Usage:       "[EXPERIMENTAL] enables experimental ingestion system",
+	},
+	&support.ConfigOption{
+		Name:        "ingest-state-reader-temp-set",
+		ConfigKey:   &config.IngestStateReaderTempSet,
+		OptType:     types.String,
+		FlagDefault: "memory",
+		Usage:       "defines where to store temporary objects during state ingestion: `memory` (default, more RAM usage, faster) or `postgres` (less RAM usage, slower)",
 	},
 }
 
@@ -300,7 +365,20 @@ func initConfig() {
 	}
 
 	// Configure log level
-	log.DefaultLogger.Level = config.LogLevel
+	log.DefaultLogger.Logger.SetLevel(config.LogLevel)
+
+	if config.IngestStateReaderTempSet != "memory" && config.IngestStateReaderTempSet != "postgres" {
+		log.Fatal("Invalid `ingest-state-reader-temp-set` value: " + config.IngestStateReaderTempSet)
+	}
+
+	// Configure DB params. When config.MaxDBConnections is set, set other
+	// DB params to that value for backward compatibility.
+	if config.MaxDBConnections != 0 {
+		config.AuroraDBMaxOpenConnections = config.MaxDBConnections
+		config.AuroraDBMaxIdleConnections = config.MaxDBConnections
+		config.CoreDBMaxOpenConnections = config.MaxDBConnections
+		config.CoreDBMaxIdleConnections = config.MaxDBConnections
+	}
 }
 
 func Execute() {

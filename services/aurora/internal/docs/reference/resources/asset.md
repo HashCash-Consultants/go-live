@@ -2,11 +2,11 @@
 title: Asset
 ---
 
-**Assets** are the units that are traded on the Hcnet Network.
+**Assets** are the units that are traded on the HcNet Network.
 
 An asset consists of an type, code, and issuer.
 
-To learn more about the concept of assets in the Hcnet network, take a look at the [Hcnet assets concept guide](https://www.hcnet.org/developers/guides/concepts/assets.html).
+To learn more about the concept of assets in the HcNet network, take a look at the [HcNet assets concept guide](https://www.hcnet.org/developers/guides/concepts/assets.html).
 
 ## Attributes
 

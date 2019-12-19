@@ -4,7 +4,6 @@ package network
 
 import (
 	"bytes"
-	"fmt"
 
 	"strings"
 
@@ -15,7 +14,7 @@ import (
 
 const (
 	// PublicNetworkPassphrase is the pass phrase used for every transaction intended for the public hcnet network
-	PublicNetworkPassphrase = "Public Global Hcnet Network ; September 2015"
+	PublicNetworkPassphrase = "Public Global HcNet Network ; September 2015"
 	// TestNetworkPassphrase is the pass phrase used for every transaction intended for the SDF-run test network
 	TestNetworkPassphrase = "Test SDF Network ; September 2015"
 )
@@ -38,7 +37,8 @@ func HashTransaction(tx *xdr.Transaction, passphrase string) ([32]byte, error) {
 		return [32]byte{}, errors.New("empty network passphrase")
 	}
 
-	_, err := fmt.Fprintf(&txBytes, "%s", ID(passphrase))
+	id := ID(passphrase)
+	_, err := txBytes.Write(id[:])
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "fprint network id failed")
 	}

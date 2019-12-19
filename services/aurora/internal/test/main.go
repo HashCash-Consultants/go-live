@@ -67,7 +67,7 @@ func LoadScenario(scenarioName string) {
 	loadScenario(scenarioName, true)
 }
 
-// LoadScenarioWithoutAurora populates the test Hcnet core database a with
+// LoadScenarioWithoutAurora populates the test HcNet core database a with
 // pre-created scenario.  Unlike `LoadScenario`, this
 func LoadScenarioWithoutAurora(scenarioName string) {
 	loadScenario(scenarioName, false)
@@ -113,26 +113,26 @@ func Start(t *testing.T) *T {
 
 	result.Ctx = log.Set(context.Background(), result.Logger)
 	result.AuroraDB = Database(t)
-	result.CoreDB = HcnetCoreDatabase(t)
+	result.CoreDB = HcNetCoreDatabase(t)
 	result.Assert = assert.New(t)
 	result.Require = require.New(t)
 
 	return result
 }
 
-// HcnetCoreDatabase returns a connection to the hcnet core test database
+// HcNetCoreDatabase returns a connection to the hcnet core test database
 //
-// DEPRECATED:  use `HcnetCore()` from test/db package
-func HcnetCoreDatabase(t *testing.T) *sqlx.DB {
-	return tdb.HcnetCore(t)
+// DEPRECATED:  use `HcNetCore()` from test/db package
+func HcNetCoreDatabase(t *testing.T) *sqlx.DB {
+	return tdb.HcNetCore(t)
 }
 
-// HcnetCoreDatabaseURL returns the database connection the url any test
+// HcNetCoreDatabaseURL returns the database connection the url any test
 // use when connecting to the hcnet-core database
 //
-// DEPRECATED:  use `HcnetCoreURL()` from test/db package
-func HcnetCoreDatabaseURL() string {
-	return tdb.HcnetCoreURL()
+// DEPRECATED:  use `HcNetCoreURL()` from test/db package
+func HcNetCoreDatabaseURL() string {
+	return tdb.HcNetCoreURL()
 }
 
 var oldDefault *log.Entry = nil

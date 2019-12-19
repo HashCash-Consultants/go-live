@@ -11,7 +11,7 @@ import (
 
 func ExampleDeriveFromPath() {
 	seed, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f")
-	key, err := DeriveForPath(HcnetPrimaryAccountPath, seed)
+	key, err := DeriveForPath(HcNetPrimaryAccountPath, seed)
 	if err != nil {
 		panic(err)
 	}
@@ -33,7 +33,7 @@ func ExampleDeriveMultipleKeys() {
 	seed, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f")
 
 	for i := 0; i < 10; i++ {
-		path := fmt.Sprintf(HcnetAccountPathFormat, i)
+		path := fmt.Sprintf(HcNetAccountPathFormat, i)
 		key, err := DeriveForPath(path, seed)
 		if err != nil {
 			panic(err)
@@ -62,7 +62,7 @@ func ExampleDeriveMultipleKeys() {
 
 func ExampleDeriveMultipleKeysFaster() {
 	seed, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f")
-	mainKey, err := DeriveForPath(HcnetAccountPrefix, seed)
+	mainKey, err := DeriveForPath(HcNetAccountPrefix, seed)
 	if err != nil {
 		panic(err)
 	}
@@ -78,7 +78,7 @@ func ExampleDeriveMultipleKeysFaster() {
 			panic(err)
 		}
 
-		fmt.Println(fmt.Sprintf(HcnetAccountPathFormat, i), kp.Seed(), kp.Address())
+		fmt.Println(fmt.Sprintf(HcNetAccountPathFormat, i), kp.Seed(), kp.Address())
 	}
 
 	// Output:
@@ -98,7 +98,7 @@ func BenchmarkDerive(b *testing.B) {
 	seed, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f")
 
 	for i := 0; i < b.N; i++ {
-		_, err := DeriveForPath(HcnetPrimaryAccountPath, seed)
+		_, err := DeriveForPath(HcNetPrimaryAccountPath, seed)
 		if err != nil {
 			panic(err)
 		}
@@ -107,7 +107,7 @@ func BenchmarkDerive(b *testing.B) {
 
 func BenchmarkDeriveFast(b *testing.B) {
 	seed, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f")
-	mainKey, err := DeriveForPath(HcnetAccountPrefix, seed)
+	mainKey, err := DeriveForPath(HcNetAccountPrefix, seed)
 	if err != nil {
 		panic(err)
 	}

@@ -2,6 +2,7 @@ package aurora
 
 import (
 	"encoding/json"
+
 	hProtocol "github.com/hcnet/go/protocols/aurora"
 	"github.com/hcnet/go/support/render/hal"
 )
@@ -33,9 +34,6 @@ type Asset = hProtocol.Asset
 
 // Deprecated: use protocols/aurora instead
 type Balance = hProtocol.Balance
-
-// Deprecated: use protocols/aurora instead
-type HistoryAccount = hProtocol.HistoryAccount
 
 // Deprecated: use protocols/aurora instead
 type Ledger = hProtocol.Ledger
@@ -100,6 +98,13 @@ type OffersPage struct {
 	Links    hal.Links `json:"_links"`
 	Embedded struct {
 		Records []Offer `json:"records"`
+	} `json:"_embedded"`
+}
+
+type TransactionsPage struct {
+	Links    hal.Links `json:"_links"`
+	Embedded struct {
+		Records []hProtocol.Transaction `json:"records"`
 	} `json:"_embedded"`
 }
 

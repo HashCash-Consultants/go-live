@@ -4,12 +4,18 @@ clientData:
   laboratoryUrl: https://www.hcnet.org/laboratory/#explorer?resource=order_book&endpoint=details
 ---
 
-People on the Hcnet network can make [offers](../resources/offer.md) to buy or sell assets.  These offers are summarized by the assets being bought and sold in [orderbooks](../resources/orderbook.md).
+People on the HcNet network can make [offers](../resources/offer.md) to buy or sell assets.
+These offers are summarized by the assets being bought and sold in
+[orderbooks](../resources/orderbook.md).
 
-Aurora will return, for each orderbook, a summary of the orderbook and the bids and asks associated with that orderbook.
+Aurora will return, for each orderbook, a summary of the orderbook and the bids and asks
+associated with that orderbook.
 
-This endpoint can also be used in [streaming](../streaming.md) mode so it is possible to use it to listen as offers are processed in the Hcnet network.
-If called in streaming mode Aurora will start at the earliest known offer unless a `cursor` is set. In that case it will start from the `cursor`. You can also set `cursor` value to `now` to only stream offers created since your request time.
+This endpoint can also be used in [streaming](../streaming.md) mode so it is possible to use it to
+listen as offers are processed in the HcNet network.  If called in streaming mode Aurora will
+start at the earliest known offer unless a `cursor` is set. In that case it will start from the
+`cursor`. You can also set `cursor` value to `now` to only stream offers created since your request
+time.
 
 ## Request
 
@@ -37,14 +43,35 @@ curl "https://aurora-testnet.hcnet.org/order_book?selling_asset_type=native&buyi
 
 ### JavaScript Example Request
 
-```js
-var HcnetSdk = require('hcnet-sdk');
-var server = new HcnetSdk.Server('https://aurora-testnet.hcnet.org');
+```javascript
+var HcNetSdk = require('hcnet-sdk');
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
 
-server.orderbook(new HcnetSdk.Asset.native(), new HcnetSdk.Asset('FOO', 'GBAUUA74H4XOQYRSOW2RZUA4QL5PB37U3JS5NE3RTB2ELJVMIF5RLMAG'))
+server.orderbook(new HcNetSdk.Asset.native(), new HcNetSdk.Asset('FOO', 'GBAUUA74H4XOQYRSOW2RZUA4QL5PB37U3JS5NE3RTB2ELJVMIF5RLMAG'))
   .call()
-  .then(function(resp) { console.log(resp); })
-  .catch(function(err) { console.log(err); })
+  .then(function(resp) {
+    console.log(resp);
+  })
+  .catch(function(err) {
+    console.log(err);
+  })
+```
+
+### JavaScript Streaming Example
+
+```javascript
+var HcNetSdk = require('hcnet-sdk')
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
+
+var orderbookHandler = function (orderbookResponse) {
+  console.log(orderbookResponse);
+};
+
+var es = server.orderbook(new HcNetSdk.Asset.native(), new HcNetSdk.Asset('FOO', 'GBAUUA74H4XOQYRSOW2RZUA4QL5PB37U3JS5NE3RTB2ELJVMIF5RLMAG'))
+  .cursor('now')
+  .stream({
+    onmessage: orderbookHandler
+  })
 ```
 
 ## Response

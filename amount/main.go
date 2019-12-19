@@ -19,7 +19,7 @@ import (
 	"github.com/hcnet/go/xdr"
 )
 
-// One is the value of one whole unit of currency. Hcnet uses 7 fixed digits
+// One is the value of one whole unit of currency. HcNet uses 7 fixed digits
 // for fractional values, thus One is 10 million (10^7).
 const (
 	One = 10000000
@@ -31,7 +31,7 @@ var (
 	// a number, more or less. The details will be checked in `math/big` internally.
 	// What we want to prevent is passing very big numbers like `1e9223372036854775807`
 	// to `big.Rat.SetString` triggering long calculations.
-	// Note: {1,20} because the biggest amount you can use in Hcnet is:
+	// Note: {1,20} because the biggest amount you can use in HcNet is:
 	// len("922337203685.4775807") = 20.
 	validAmountSimple          = regexp.MustCompile("^-?[.0-9]{1,20}$")
 	negativePositiveNumberOnly = regexp.MustCompile("^-?[0-9]+$")

@@ -26,9 +26,9 @@ curl "https://aurora-testnet.hcnet.org/accounts/GA2HGBJIJKI6O4XEM7CZWY5PS6GKSXL6
 
 ### JavaScript Example Request
 
-```js
-var HcnetSdk = require('hcnet-sdk');
-var server = new HcnetSdk.Server('https://aurora-testnet.hcnet.org');
+```javascript
+var HcNetSdk = require('hcnet-sdk');
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
 
 server.accounts()
   .accountId("GAKLBGHNHFQ3BMUYG5KU4BEWO6EYQHZHAXEWC33W34PH2RBHZDSQBD75")

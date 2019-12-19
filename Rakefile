@@ -8,12 +8,12 @@ namespace :xdr do
   # Prior to launch, we should be separating our .x files into a separate
   # repo, and should be able to improve this integration.
   HAYASHI_XDR = [
-                 "src/xdr/Hcnet-types.x",
-                 "src/xdr/Hcnet-ledger-entries.x",
-                 "src/xdr/Hcnet-transaction.x",
-                 "src/xdr/Hcnet-ledger.x",
-                 "src/xdr/Hcnet-overlay.x",
-                 "src/xdr/Hcnet-SCP.x",
+                 "src/xdr/HcNet-types.x",
+                 "src/xdr/HcNet-ledger-entries.x",
+                 "src/xdr/HcNet-transaction.x",
+                 "src/xdr/HcNet-ledger.x",
+                 "src/xdr/HcNet-overlay.x",
+                 "src/xdr/HcNet-SCP.x",
                 ]
   LOCAL_XDR_PATHS = HAYASHI_XDR.map{ |src| "xdr/" + File.basename(src) }
 

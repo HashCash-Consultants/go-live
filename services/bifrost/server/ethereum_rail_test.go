@@ -83,7 +83,7 @@ func (suite *EthereumRailTestSuite) TestAssociationAlreadyProcessed() {
 		Chain:            database.ChainEthereum,
 		AddressIndex:     1,
 		Address:          "0x80D3ee1268DC1A2d1b9E73D49050083E75Ef7c2D",
-		HcnetPublicKey: "GDULKYRRVOMASFMXBYD4BYFRSHAKQDREEVVP2TMH2CER3DW2KATIOASB",
+		HcNetPublicKey: "GDULKYRRVOMASFMXBYD4BYFRSHAKQDREEVVP2TMH2CER3DW2KATIOASB",
 		CreatedAt:        time.Now(),
 	}
 	suite.MockDatabase.
@@ -107,7 +107,7 @@ func (suite *EthereumRailTestSuite) TestAssociationSuccess() {
 		Chain:            database.ChainEthereum,
 		AddressIndex:     1,
 		Address:          "0x80D3ee1268DC1A2d1b9E73D49050083E75Ef7c2D",
-		HcnetPublicKey: "GDULKYRRVOMASFMXBYD4BYFRSHAKQDREEVVP2TMH2CER3DW2KATIOASB",
+		HcNetPublicKey: "GDULKYRRVOMASFMXBYD4BYFRSHAKQDREEVVP2TMH2CER3DW2KATIOASB",
 		CreatedAt:        time.Now(),
 	}
 	suite.MockDatabase.
@@ -125,7 +125,7 @@ func (suite *EthereumRailTestSuite) TestAssociationSuccess() {
 			suite.Assert().Equal("ETH", string(queue.AssetCodeETH))
 			suite.Assert().Equal(queue.AssetCodeETH, queueTransaction.AssetCode)
 			suite.Assert().Equal("1.0000000", queueTransaction.Amount)
-			suite.Assert().Equal(association.HcnetPublicKey, queueTransaction.HcnetPublicKey)
+			suite.Assert().Equal(association.HcNetPublicKey, queueTransaction.HcNetPublicKey)
 		})
 	suite.MockSSEServer.
 		On("BroadcastEvent", transaction.To, sse.TransactionReceivedAddressEvent, []byte(nil))

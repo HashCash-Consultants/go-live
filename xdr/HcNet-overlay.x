@@ -1,8 +1,8 @@
-// Copyright 2015 Hcnet Development Foundation and contributors. Licensed
+// Copyright 2015 HcNet Development Foundation and contributors. Licensed
 // under the Apache License, Version 2.0. See the COPYING file at the root
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
-%#include "xdr/Hcnet-ledger.h"
+%#include "xdr/HcNet-ledger.h"
 
 namespace hcnet
 {
@@ -99,7 +99,7 @@ struct DontHave
     uint256 reqHash;
 };
 
-union HcnetMessage switch (MessageType type)
+union HcNetMessage switch (MessageType type)
 {
 case ERROR_MSG:
     Error error;
@@ -139,7 +139,7 @@ case 0:
     struct
 {
    uint64 sequence;
-   HcnetMessage message;
+   HcNetMessage message;
    HmacSha256Mac mac;
     } v0;
 };

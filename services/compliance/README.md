@@ -21,7 +21,7 @@ The `compliance.cfg` file must be present in a working directory (you can load a
 * `needs_auth` - set to `true` if you need to do sanctions check for payment receiver
 * `network_passphrase` - passphrase of the network that will be used with this bridge server:
    * test network: `Test SDF Network ; September 2015`
-   * public network: `Public Global Hcnet Network ; September 2015`
+   * public network: `Public Global HcNet Network ; September 2015`
 * `database` - This database is used internally to store memo information and to keep track of what FIs have been authorized to receive customer info.
   * `type` - database type (mysql, postgres)
   * `url` - url to database connection. **IMPORTANT** The `compliance` server must not use the same database as the `bridge` server.
@@ -88,8 +88,8 @@ name |  | description
 --- | --- | ---
 `id` | required | ID of the payment/transaction. In case of `pending` response or errors, you should resubmit the request with the same `id` value.
 `source` | required | Account ID of transaction source account.
-`sender` | required | Hcnet address (ex. `bob*hcnet.org`) of payment sender account.
-`destination` | required | Account ID or Hcnet address (ex. `bob*hcnet.org`) of payment destination account
+`sender` | required | HcNet address (ex. `bob*hcnet.org`) of payment sender account.
+`destination` | required | Account ID or HcNet address (ex. `bob*hcnet.org`) of payment destination account
 `amount` | required | Amount that destination will receive
 `extra_memo` | optional | Additional information attached to memo preimage.
 `asset_code` | optional | Asset code (XLM when empty) destination will receive
@@ -237,7 +237,7 @@ This callback should return the compliance information of your customer identifi
 
 name | description
 --- | ---
-`address` | Hcnet address (ex. `alice*acme.com`) of the user.
+`address` | HcNet address (ex. `alice*acme.com`) of the user.
 
 #### Response
 
@@ -257,7 +257,7 @@ This callback should return the status of a transaction as explained in [`SEP-00
 
 name | description
 --- | ---
-`id` | Hcnet transaction ID.
+`id` | HcNet transaction ID.
 
 #### Response
 This callback should return `200 OK` status code and JSON object with the transaction status info:

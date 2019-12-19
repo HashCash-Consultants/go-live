@@ -4,15 +4,15 @@ clientData:
   laboratoryUrl: https://www.hcnet.org/laboratory/#explorer?resource=transactions&endpoint=create
 ---
 
-Posts a new [transaction](../resources/transaction.md) to the Hcnet Network.
+Posts a new [transaction](../resources/transaction.md) to the HcNet Network.
 Note that creating a valid transaction and signing it properly is the
 responsibility of your client library.
 
 Transaction submission and the subsequent validation and inclusion into the
-Hcnet Network's ledger is a [complicated and asynchronous
+HcNet Network's ledger is a [complicated and asynchronous
 process](https://www.hcnet.org/developers/learn/concepts/transactions.html#life-cycle).
 To reduce the complexity, aurora manages these asynchronous processes for the
-client and will wait to hear results from the Hcnet Network before returning
+client and will wait to hear results from the HcNet Network before returning
 an HTTP response to a client.
 
 Transaction submission to aurora aims to be

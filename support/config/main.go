@@ -63,13 +63,13 @@ func decode(content string, dest interface{}) error {
 
 func init() {
 	govalidator.SetFieldsRequiredByDefault(true)
-	govalidator.CustomTypeTagMap.Set("hcnet_accountid", govalidator.CustomTypeValidator(isHcnetAccountID))
-	govalidator.CustomTypeTagMap.Set("hcnet_seed", govalidator.CustomTypeValidator(isHcnetSeed))
-	govalidator.CustomTypeTagMap.Set("hcnet_amount", govalidator.CustomTypeValidator(isHcnetAmount))
+	govalidator.CustomTypeTagMap.Set("hcnet_accountid", govalidator.CustomTypeValidator(isHcNetAccountID))
+	govalidator.CustomTypeTagMap.Set("hcnet_seed", govalidator.CustomTypeValidator(isHcNetSeed))
+	govalidator.CustomTypeTagMap.Set("hcnet_amount", govalidator.CustomTypeValidator(isHcNetAmount))
 
 }
 
-func isHcnetAmount(i interface{}, context interface{}) bool {
+func isHcNetAmount(i interface{}, context interface{}) bool {
 	enc, ok := i.(string)
 
 	if !ok {
@@ -78,14 +78,10 @@ func isHcnetAmount(i interface{}, context interface{}) bool {
 
 	_, err := amount.Parse(enc)
 
-	if err == nil {
-		return true
-	}
-
-	return false
+	return err == nil
 }
 
-func isHcnetAccountID(i interface{}, context interface{}) bool {
+func isHcNetAccountID(i interface{}, context interface{}) bool {
 	enc, ok := i.(string)
 
 	if !ok {
@@ -94,14 +90,10 @@ func isHcnetAccountID(i interface{}, context interface{}) bool {
 
 	_, err := strkey.Decode(strkey.VersionByteAccountID, enc)
 
-	if err == nil {
-		return true
-	}
-
-	return false
+	return err == nil
 }
 
-func isHcnetSeed(i interface{}, context interface{}) bool {
+func isHcNetSeed(i interface{}, context interface{}) bool {
 	enc, ok := i.(string)
 
 	if !ok {
@@ -110,9 +102,5 @@ func isHcnetSeed(i interface{}, context interface{}) bool {
 
 	_, err := strkey.Decode(strkey.VersionByteSeed, enc)
 
-	if err == nil {
-		return true
-	}
-
-	return false
+	return err == nil
 }

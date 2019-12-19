@@ -1,6 +1,6 @@
 source 'https://rubygems.org'
 
-gem 'xdrgen', git:'https://github.com/swetakedia/xdrgen.git', branch: 'master'
+gem 'xdrgen', git:'https://github.com/hcnet/xdrgen.git', branch: 'master'
 gem 'pry'
 gem 'octokit'
 gem 'netrc'

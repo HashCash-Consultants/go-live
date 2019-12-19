@@ -1,103 +1,81 @@
-# Aurora setup
+# HcNet Go 
+[![Build Status](https://circleci.com/gh/hcnet/go.svg?style=shield)](https://circleci.com/gh/hcnet/go)
+[![GoDoc](https://godoc.org/github.com/hcnet/go?status.svg)](https://godoc.org/github.com/hcnet/go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/hcnet/go)](https://goreportcard.com/report/github.com/hcnet/go)
 
-To build aurora you must have go and dep in your ubuntu enivironment. To install go you need to perform  below steps and go version must be >=1.9
+This repo is the home for all of the public go code produced by SDF.  In addition to various tools and services, this repository is the SDK from which you may develop your own applications that integrate with the hcnet network.
 
+## Package Index
 
-# Install go
+* [Aurora Server](services/aurora): Full-featured API server for HcNet network
+* [Go Aurora SDK - auroraclient](clients/auroraclient): Client for Aurora server (queries and transaction submission)
+* [Go Aurora SDK - txnbuild](txnbuild): Construct HcNet transactions and operations
+* [Bifrost](services/bifrost): Bitcoin/Ethereum -> HcNet bridge
+* [Ticker](services/ticker): An API server that provides statistics about assets and markets on the HcNet network
+* [Keystore](services/keystore): An API server that is used to store and manage encrypted keys for HcNet client applications
+* Servers for Anchors & Financial Institutions
+  * [Bridge Server](services/bridge): send payments and take action when payments are received
+  * [Compliance Server](services/compliance): Allows financial institutions to exchange KYC information
+  * [Federation Server](services/federation): Allows organizations to provide addresses for users (`jane*examplebank.com`)
 
+## Dependencies
 
-- sudo curl -O https://storage.googleapis.com/golang/go1.9.1.linux-amd64.tar.gz
-- sudo tar -xvf go1.9.1.linux-amd64.tar.gz
-- Open vi .profile file and add following lines:
-```ssh
-PATH="$HOME/bin:$HOME/.local/bin:$PATH"
-export GOPATH=$HOME/go
-export PATH=${GOPATH}/bin:${PATH}
-and save the file
-```
-- Open vi .bashrc and add following lines
-```ssh
-eval "$(direnv hook bash)"
-export GOPATH=$HOME/go
-export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
-```
-- To refresh the files execute following commands:
-```ssh
-source ~/.profile
-source  ~/.bashrc
-```
-- Check go version
-```ssh
-$ go version
+This repository depends upon a [number of external dependencies](./Gopkg.lock), and uses [dep](https://golang.github.io/dep/) to manage them (see installation instructions [here](https://golang.github.io/dep/docs/installation.html)).  
+
+To satisfy dependencies and populate the `vendor` directory run: 
+
+```bash
+$ dep ensure -v
 ```
 
-# Install dep
-- sudo -s
-- curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-- Check dep version 
-```ssh
-$ dep version
+Note that if this hangs indefinitely on your machine, you might need to check if mercurial is installed.
 
-```
+You can use dep yourself in your project and add hcnet go as a vendor'd dependency, or you can just drop this repos as `$GOPATH/src/github.com/hcnet/go` to import it the canonical way (you still need to run `dep ensure -v`).
 
-# Install aurora
+When creating this project, we had to decide whether or not we committed our external dependencies to the repo.  We decided that we would not, by default, do so.  This lets us avoid the diff churn associated with updating dependencies while allowing an acceptable path to get reproducible builds.  To do so, simply install dep and run `dep ensure -v` in your checkout of the code.  We realize this is a judgement call; Please feel free to open an issue if you would like to make a case that we change this policy.
 
-- mkdir github.com/hcnet in /home/ubuntu/go/src
-- go to /home/ubuntu/go/src/github.com/hcnet and execute following command:
-- git clone https://github.com/HashCash-Consultants/go-live.git
-- go to /home/ubuntu/go/src/github.com/hcnet/ and change directory name go-live to go
-- go to /home/ubuntu/go/src/github.com/hcnet/go and execute following command:
-```
-$ sudo apt-get install mercurial
-```
+## Directory Layout
 
-```ssh
-$ dep ensure –v
-```
-- go to /home/ubuntu/go/src  and execute following command:
-```ssh
-$ go install -ldflags "-X github.com/hcnet/go/support/app.version=aurora-0.16.0" github.com/hcnet/go/services/aurora/
-```
-- after running above command you check aurora build in <Your_dir>/go/bin folder and you can check aurora version by  following command :
-```ssh
-$ ./aurora version
-```
+In addition to the other top-level packages, there are a few special directories that contain specific types of packages:
 
-# Aurora database setup
-- Create a user for HC Net aurora database.
-```
-$ sudo -s
-$ su – postgres
-$ createuser <username> --pwprompt
-$ Enter password for new role: <Enter password>
-$ Enter it again: <Enter the pwd again>
-```
-- You need to add Aurora user. Exit from postgres and login as root user and execute following command.
-```
-$ exit
-$ adduser <username>;
-```
-- To verify if user is created, execute following commands
-```
-$ su - postgres
-$ psql
-$ \du
-```
-- Create a blank database using following command.
-```
- $ CREATE DATABASE <DB_NAME> OWNER <user created>;
-```
- # Initialize aurora
- - Initialize aurora with database login as root user and Go   “go/bin” using following command
-```
- $ export DATABASE_URL="postgresql://define aurora db username:define aurora db user password@localhost/define aurora database name"
-```
-- After that Go “go/bin” and execute following command
-```
-$ ./aurora db init
-```
-# Aurora up command
-- Go “go/bin” execute following command
-```
-$ sudo nohup ./aurora --db-url="postgresql://define aurora db username:define aurora db user password @localhost/define aurora database name" --hcnet-core-db-url="postgresql://define Node1 database username:define Node1 database user password@localhost/define Node1 database name" --hcnet-core-url="http://localhost:11626" --network-passphrase="define Network password" --ingest="true" --per-hour-rate-limit=540000000 &
-```
+* **clients** contains packages that provide client packages to the various HcNet services.
+* **exp** contains experimental packages.  Use at your own risk.
+* **handlers** contains packages that provide pluggable implementors of `http.Handler` that make it easier to incorporate portions of the HcNet protocol into your own http server. 
+* **support** contains packages that are not intended for consumption outside of HcNet's other packages.  Packages that provide common infrastructure for use in our services and tools should go here, such as `db` or `log`. 
+* **support/scripts** contains single-file go programs and bash scripts used to support the development of this repo. 
+* **services** contains packages that compile to applications that are long-running processes (such as API servers).
+* **tools** contains packages that compile to command line applications.
+
+Each of these directories have their own README file that explain further the nature of their contents.
+
+### Other packages
+
+In addition to the packages described above, this repository contains various packages related to working with the HcNet network from a go program.  It's recommended that you use [godoc](https://godoc.org/github.com/hcnet/go#pkg-subdirectories) to browse the documentation for each.
+
+
+## Package source layout
+
+While much of the code in individual packages is organized based upon different developers' personal preferences, many of the packages follow a simple convention for organizing the declarations inside of a package that aim to aid in your ability to find code.
+
+In each package, there may be one or more of a set of common files:
+
+- *main.go*: Every package should have a `main.go` file.  This file contains the package documentation (unless a separate `doc.go` file is used), _all_ of the exported vars, consts, types and funcs for the package. 
+- *internal.go*:  This file should contain unexported vars, consts, types, and funcs.  Conceptually, it should be considered the private counterpart to the `main.go` file of a package
+- *errors.go*: This file should contains declarations (both types and vars) for errors that are used by the package.
+- *example_test.go*: This file should contains example tests, as described at https://blog.golang.org/examples.
+
+In addition to the above files, a package often has files that contains code that is specific to one declared type.  This file uses the snake case form of the type name (for example `loggly_hook.go` would correspond to the type `LogglyHook`).  This file should contain method declarations, interface implementation assertions and any other declarations that are tied solely to that type.
+
+Each non-test file can have a test counterpart like normal, whose name ends with `_test.go`.  The common files described above also have their own test counterparts... for example `internal_test.go` should contains tests that test unexported behavior and more commonly test helpers that are unexported.
+
+Generally, file contents are sorted by exported/unexported, then declaration type  (ordered as consts, vars, types, then funcs), then finally alphabetically.
+
+### Test helpers
+
+Often, we provide test packages that aid in the creation of tests that interact with our other packages.  For example, the `support/db` package has the `support/db/dbtest` package underneath it that contains elements that make it easier to test code that accesses a SQL database.  We've found that this pattern of having a separate test package maximizes flexibility and simplifies package dependencies.
+
+
+## Coding conventions
+
+- Always document exported package elements: vars, consts, funcs, types, etc.
+- Tests are better than no tests.

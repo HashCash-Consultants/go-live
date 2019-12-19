@@ -36,6 +36,8 @@ type TableName string
 
 const (
 	AssetStatsTableName              TableName = "asset_stats"
+	AccountsTableName                TableName = "history_accounts"
+	AssetsTableName                  TableName = "history_assets"
 	EffectsTableName                 TableName = "history_effects"
 	LedgersTableName                 TableName = "history_ledgers"
 	OperationParticipantsTableName   TableName = "history_operation_participants"
@@ -63,6 +65,9 @@ type Cursor struct {
 	// Err is the error that caused this iteration to fail, if any.
 	Err error
 
+	// Name is a unique identifier tracking the latest ingested ledger on hcnet-core
+	Name string
+
 	lg   int32
 	tx   int
 	op   int
@@ -77,6 +82,11 @@ type Config struct {
 	// IngestFailedTransactions is a feature flag that determines if system
 	// should ingest failed transactions.
 	IngestFailedTransactions bool
+	// CursorName is the cursor used for ingesting from hcnet-core.
+	// Setting multiple cursors in different Aurora instances allows multiple
+	// Auroras to ingest from the same hcnet-core instance without cursor
+	// collisions.
+	CursorName string
 }
 
 // EffectIngestion is a helper struct to smooth the ingestion of effects.  this
@@ -111,9 +121,9 @@ type System struct {
 	Metrics IngesterMetrics
 	// Network is the passphrase for the network being imported
 	Network string
-	// HcnetCoreURL is the http endpoint of the hcnet-core that data is being
+	// HcNetCoreURL is the http endpoint of the hcnet-core that data is being
 	// ingested from.
-	HcnetCoreURL string
+	HcNetCoreURL string
 	// SkipCursorUpdate causes the ingestor to skip
 	// reporting the "last imported ledger" cursor to
 	// hcnet-core
@@ -174,9 +184,9 @@ type Session struct {
 	Ingestion *Ingestion
 	// Network is the passphrase for the network being imported
 	Network string
-	// HcnetCoreURL is the http endpoint of the hcnet-core that data is being
+	// HcNetCoreURL is the http endpoint of the hcnet-core that data is being
 	// ingested from.
-	HcnetCoreURL string
+	HcNetCoreURL string
 	// ClearExisting causes the session to clear existing data from the aurora db
 	// when the session is run.
 	ClearExisting bool
@@ -206,7 +216,7 @@ func New(network string, coreURL string, core, aurora *db.Session, config Config
 	i := &System{
 		Config:         config,
 		Network:        network,
-		HcnetCoreURL: coreURL,
+		HcNetCoreURL: coreURL,
 		AuroraDB:      aurora,
 		CoreDB:         core,
 	}
@@ -223,6 +233,7 @@ func NewCursor(first, last int32, i *System) *Cursor {
 		FirstLedger: first,
 		LastLedger:  last,
 		CoreDB:      i.CoreDB,
+		Name:        i.Config.CursorName,
 		Metrics:     &i.Metrics,
 	}
 }
@@ -238,7 +249,7 @@ func NewSession(i *System) *Session {
 			DB: hdb,
 		},
 		Network:          i.Network,
-		HcnetCoreURL:   i.HcnetCoreURL,
+		HcNetCoreURL:   i.HcNetCoreURL,
 		SkipCursorUpdate: i.SkipCursorUpdate,
 		Metrics:          &i.Metrics,
 		AssetStats: &AssetStats{

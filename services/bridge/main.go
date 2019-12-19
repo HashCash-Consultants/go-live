@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"runtime"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/facebookgo/inject"
 	"github.com/spf13/cobra"
 	"github.com/hcnet/go/clients/federation"
-	"github.com/hcnet/go/clients/aurora"
+	hc "github.com/hcnet/go/clients/auroraclient"
 	"github.com/hcnet/go/clients/hcnettoml"
 	"github.com/hcnet/go/services/bridge/internal/config"
 	"github.com/hcnet/go/services/bridge/internal/db"
@@ -137,9 +138,10 @@ func NewApp(config config.Config, migrateFlag bool, versionFlag bool, version st
 		Timeout: 60 * time.Second,
 	}
 
-	h := aurora.Client{
-		URL:  config.Aurora,
-		HTTP: &httpClientWithTimeout,
+	h := hc.Client{
+		AuroraURL: config.Aurora,
+		HTTP:       http.DefaultClient,
+		AppName:    "bridge-server",
 	}
 
 	log.Print("Creating and initializing TransactionSubmitter")
@@ -197,7 +199,7 @@ func NewApp(config config.Config, migrateFlag bool, versionFlag bool, version st
 
 	federationClient := federation.Client{
 		HTTP:        &httpClientWithTimeout,
-		HcnetTOML: &hcnettomlClient,
+		HcNetTOML: &hcnettomlClient,
 	}
 
 	err = g.Provide(

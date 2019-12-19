@@ -1,4 +1,4 @@
-// Package http provides easy access to Hcnet's best practices for building
+// Package http provides easy access to HcNet's best practices for building
 // http servers.  The primary method to use is `Serve`, which sets up
 // an server that can support http/2 and can gracefully quit after receiving a
 // SIGINT signal.

@@ -42,7 +42,7 @@ type Event struct {
 }
 
 // Storage contains history of sent events. Because each transaction and
-// Hcnet account is always processed by a single Bifrost server, we need
+// HcNet account is always processed by a single Bifrost server, we need
 // to broadcast events in case client streams events from the other Bifrost
 // server.
 //

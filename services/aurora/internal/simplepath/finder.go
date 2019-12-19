@@ -5,6 +5,7 @@ import (
 	"github.com/hcnet/go/services/aurora/internal/db2/core"
 	"github.com/hcnet/go/services/aurora/internal/paths"
 	"github.com/hcnet/go/support/log"
+	"github.com/hcnet/go/xdr"
 )
 
 // Finder implements the paths.Finder interface and searchs for
@@ -55,4 +56,16 @@ func (f *Finder) Find(q paths.Query, maxLength uint) (result []paths.Path, err e
 		WithField("err", s.Err).
 		Info("Finished pathfind")
 	return
+}
+
+// FindFixedPaths will return an error because this implementation
+// does not support this operation
+func (f *Finder) FindFixedPaths(
+	sourceAccount *xdr.AccountId,
+	sourceAsset xdr.Asset,
+	amountToSpend xdr.Int64,
+	destinationAsset xdr.Asset,
+	maxLength uint,
+) ([]paths.Path, error) {
+	return nil, errors.New("Not implemented")
 }

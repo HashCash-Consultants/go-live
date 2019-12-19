@@ -25,14 +25,15 @@ type Config struct {
 	AuroraURL        string      `toml:"aurora_url" valid:"required"`
 	StartingBalance   string      `toml:"starting_balance" valid:"required"`
 	TLS               *config.TLS `valid:"optional"`
+	NumMinions        int         `toml:"num_minions" valid:"optional"`
 }
 
 func main() {
 
 	rootCmd := &cobra.Command{
 		Use:   "friendbot",
-		Short: "friendbot for the Hcnet Test Network",
-		Long:  "client-facing api server for the friendbot service on the Hcnet Test Network",
+		Short: "friendbot for the HcNet Test Network",
+		Long:  "client-facing api server for the friendbot service on the HcNet Test Network",
 		Run:   run,
 	}
 
@@ -57,8 +58,11 @@ func run(cmd *cobra.Command, args []string) {
 		}
 		os.Exit(1)
 	}
-
-	fb := initFriendbot(cfg.FriendbotSecret, cfg.NetworkPassphrase, cfg.AuroraURL, cfg.StartingBalance)
+	fb, err := initFriendbot(cfg.FriendbotSecret, cfg.NetworkPassphrase, cfg.AuroraURL, cfg.StartingBalance, cfg.NumMinions)
+	if err != nil {
+		log.Error(err)
+		os.Exit(1)
+	}
 	router := initRouter(fb)
 	registerProblems()
 

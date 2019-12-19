@@ -1,2 +1,2 @@
-// Package exp houses experimental packages related to Hcnet developement
+// Package exp houses experimental packages related to HcNet developement
 package exp

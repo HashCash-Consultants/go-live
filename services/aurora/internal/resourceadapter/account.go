@@ -4,23 +4,22 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/hcnet/go/protocols/aurora"
+	protocol "github.com/hcnet/go/protocols/aurora"
 	"github.com/hcnet/go/services/aurora/internal/db2/core"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
 	"github.com/hcnet/go/services/aurora/internal/httpx"
+	"github.com/hcnet/go/support/errors"
 	"github.com/hcnet/go/support/render/hal"
 )
 
 // PopulateAccount fills out the resource's fields
 func PopulateAccount(
 	ctx context.Context,
-	dest *Account,
+	dest *protocol.Account,
 	ca core.Account,
 	cd []core.AccountData,
 	cs []core.Signer,
 	ct []core.Trustline,
-	ha history.Account,
-) (err error) {
+) error {
 	dest.ID = ca.Accountid
 	dest.AccountID = ca.Accountid
 	dest.Sequence = ca.Seqnum
@@ -33,18 +32,18 @@ func PopulateAccount(
 	PopulateAccountThresholds(&dest.Thresholds, ca)
 
 	// populate balances
-	dest.Balances = make([]Balance, len(ct)+1)
+	dest.Balances = make([]protocol.Balance, len(ct)+1)
 	for i, tl := range ct {
-		err = PopulateBalance(ctx, &dest.Balances[i], tl)
+		err := PopulateBalance(&dest.Balances[i], tl)
 		if err != nil {
-			return
+			return errors.Wrap(err, "populating balance")
 		}
 	}
 
 	// add native balance
-	err = PopulateNativeBalance(&dest.Balances[len(dest.Balances)-1], ca.Balance, ca.BuyingLiabilities, ca.SellingLiabilities)
+	err := PopulateNativeBalance(&dest.Balances[len(dest.Balances)-1], ca.Balance, ca.BuyingLiabilities, ca.SellingLiabilities)
 	if err != nil {
-		return
+		return errors.Wrap(err, "populating native balance")
 	}
 
 	// populate data
@@ -54,7 +53,7 @@ func PopulateAccount(
 	}
 
 	// populate signers
-	dest.Signers = make([]Signer, len(cs)+1)
+	dest.Signers = make([]protocol.Signer, len(cs)+1)
 	for i, s := range cs {
 		PopulateSigner(ctx, &dest.Signers[i], s)
 	}
@@ -72,5 +71,5 @@ func PopulateAccount(
 	dest.Links.Trades = lb.PagedLink(self, "trades")
 	dest.Links.Data = lb.Link(self, "data/{key}")
 	dest.Links.Data.PopulateTemplated()
-	return
+	return nil
 }

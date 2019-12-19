@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hcnet/go/clients/aurora"
+	hc "github.com/hcnet/go/clients/auroraclient"
 	"github.com/hcnet/go/clients/hcnettoml"
 	"github.com/hcnet/go/support/http/httptest"
 	"github.com/stretchr/testify/assert"
@@ -16,10 +16,10 @@ import (
 func TestLookupByAddress(t *testing.T) {
 	hmock := httptest.NewClient()
 	tomlmock := &hcnettoml.MockClient{}
-	c := &Client{HcnetTOML: tomlmock, HTTP: hmock}
+	c := &Client{HcNetTOML: tomlmock, HTTP: hmock}
 
 	// happy path - string integer
-	tomlmock.On("GetHcnetToml", "hcnet.org").Return(&hcnettoml.Response{
+	tomlmock.On("GetHcNetToml", "hcnet.org").Return(&hcnettoml.Response{
 		FederationServer: "https://hcnet.org/federation",
 	}, nil)
 	hmock.On("GET", "https://hcnet.org/federation").
@@ -38,7 +38,7 @@ func TestLookupByAddress(t *testing.T) {
 	}
 
 	// happy path - integer
-	tomlmock.On("GetHcnetToml", "hcnet.org").Return(&hcnettoml.Response{
+	tomlmock.On("GetHcNetToml", "hcnet.org").Return(&hcnettoml.Response{
 		FederationServer: "https://hcnet.org/federation",
 	}, nil)
 	hmock.On("GET", "https://hcnet.org/federation").
@@ -57,7 +57,7 @@ func TestLookupByAddress(t *testing.T) {
 	}
 
 	// happy path - string
-	tomlmock.On("GetHcnetToml", "hcnet.org").Return(&hcnettoml.Response{
+	tomlmock.On("GetHcNetToml", "hcnet.org").Return(&hcnettoml.Response{
 		FederationServer: "https://hcnet.org/federation",
 	}, nil)
 	hmock.On("GET", "https://hcnet.org/federation").
@@ -76,7 +76,7 @@ func TestLookupByAddress(t *testing.T) {
 	}
 
 	// response exceeds limit
-	tomlmock.On("GetHcnetToml", "toobig.org").Return(&hcnettoml.Response{
+	tomlmock.On("GetHcNetToml", "toobig.org").Return(&hcnettoml.Response{
 		FederationServer: "https://toobig.org/federation",
 	}, nil)
 	hmock.On("GET", "https://toobig.org/federation").
@@ -92,38 +92,38 @@ func TestLookupByAddress(t *testing.T) {
 	}
 
 	// failed toml resolution
-	tomlmock.On("GetHcnetToml", "missing.org").Return(
+	tomlmock.On("GetHcNetToml", "missing.org").Return(
 		(*hcnettoml.Response)(nil),
 		errors.New("toml failed"),
 	)
-	resp, err = c.LookupByAddress("scott*missing.org")
+	_, err = c.LookupByAddress("scott*missing.org")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "toml failed")
 	}
 
 	// 404 federation response
-	tomlmock.On("GetHcnetToml", "404.org").Return(&hcnettoml.Response{
+	tomlmock.On("GetHcNetToml", "404.org").Return(&hcnettoml.Response{
 		FederationServer: "https://404.org/federation",
 	}, nil)
 	hmock.On("GET", "https://404.org/federation").ReturnNotFound()
-	resp, err = c.LookupByAddress("scott*404.org")
+	_, err = c.LookupByAddress("scott*404.org")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "failed with (404)")
 	}
 
 	// connection error on federation response
-	tomlmock.On("GetHcnetToml", "error.org").Return(&hcnettoml.Response{
+	tomlmock.On("GetHcNetToml", "error.org").Return(&hcnettoml.Response{
 		FederationServer: "https://error.org/federation",
 	}, nil)
 	hmock.On("GET", "https://error.org/federation").ReturnError("kaboom!")
-	resp, err = c.LookupByAddress("scott*error.org")
+	_, err = c.LookupByAddress("scott*error.org")
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "kaboom!")
 	}
 }
 
 func TestLookupByID(t *testing.T) {
-	auroraMock := &aurora.MockClient{}
+	auroraMock := &hc.MockClient{}
 	client := &Client{Aurora: auroraMock}
 
 	auroraMock.On("HomeDomainForAccount", "GASTNVNLHVR3NFO3QACMHCJT3JUSIV4NBXDHDO4VTPDTNN65W3B2766C").
@@ -138,10 +138,10 @@ func TestLookupByID(t *testing.T) {
 func TestForwardRequest(t *testing.T) {
 	hmock := httptest.NewClient()
 	tomlmock := &hcnettoml.MockClient{}
-	c := &Client{HcnetTOML: tomlmock, HTTP: hmock}
+	c := &Client{HcNetTOML: tomlmock, HTTP: hmock}
 
 	// happy path - string integer
-	tomlmock.On("GetHcnetToml", "hcnet.org").Return(&hcnettoml.Response{
+	tomlmock.On("GetHcNetToml", "hcnet.org").Return(&hcnettoml.Response{
 		FederationServer: "https://hcnet.org/federation",
 	}, nil)
 	hmock.On("GET", "https://hcnet.org/federation").

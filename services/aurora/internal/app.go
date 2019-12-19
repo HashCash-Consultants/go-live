@@ -13,11 +13,14 @@ import (
 	"github.com/gomodule/redigo/redis"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/hcnet/go/clients/hcnetcore"
+	"github.com/hcnet/go/exp/orderbook"
 	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
 	"github.com/hcnet/go/services/aurora/internal/db2/core"
 	"github.com/hcnet/go/services/aurora/internal/db2/history"
+	"github.com/hcnet/go/services/aurora/internal/expingest"
 	"github.com/hcnet/go/services/aurora/internal/ingest"
 	"github.com/hcnet/go/services/aurora/internal/ledger"
+	"github.com/hcnet/go/services/aurora/internal/logmetrics"
 	"github.com/hcnet/go/services/aurora/internal/operationfeestats"
 	"github.com/hcnet/go/services/aurora/internal/paths"
 	"github.com/hcnet/go/services/aurora/internal/reap"
@@ -34,7 +37,7 @@ import (
 // App represents the root of the state of a aurora instance.
 type App struct {
 	config                       Config
-	web                          *Web
+	web                          *web
 	historyQ                     *history.Q
 	coreQ                        *core.Q
 	ctx                          context.Context
@@ -47,6 +50,7 @@ type App struct {
 	submitter                    *txsub.System
 	paths                        paths.Finder
 	ingester                     *ingest.System
+	expingester                  *expingest.System
 	reaper                       *reap.System
 	ticks                        *time.Ticker
 
@@ -100,6 +104,10 @@ func (a *App) Serve() {
 
 	go a.run()
 
+	if a.expingester != nil {
+		go a.expingester.Run()
+	}
+
 	var err error
 	if a.config.TLSCert != "" {
 		err = srv.ListenAndServeTLS(a.config.TLSCert, a.config.TLSKey)
@@ -119,6 +127,9 @@ func (a *App) Serve() {
 // Close cancels the app. It does not close DB connections - use App.CloseDB().
 func (a *App) Close() {
 	a.cancel()
+	if a.expingester != nil {
+		a.expingester.Shutdown()
+	}
 	a.ticks.Stop()
 }
 
@@ -189,6 +200,12 @@ func (a *App) UpdateLedgerState() {
 	err = a.HistoryQ().ElderLedger(&next.HistoryElder)
 	if err != nil {
 		logErr(err, "failed to load the oldest known ledger state from history DB")
+		return
+	}
+
+	next.ExpHistoryLatest, err = a.HistoryQ().GetLastLedgerExpIngestNonBlocking()
+	if err != nil {
+		logErr(err, "failed to load the oldest known exp ledger state from history DB")
 		return
 	}
 
@@ -278,16 +295,16 @@ func (a *App) UpdateOperationFeeStatsState() {
 	operationfeestats.SetState(next)
 }
 
-// UpdateHcnetCoreInfo updates the value of coreVersion,
-// currentProtocolVersion, and coreSupportedProtocolVersion from the Hcnet
+// UpdateHcNetCoreInfo updates the value of coreVersion,
+// currentProtocolVersion, and coreSupportedProtocolVersion from the HcNet
 // core API.
-func (a *App) UpdateHcnetCoreInfo() {
-	if a.config.HcnetCoreURL == "" {
+func (a *App) UpdateHcNetCoreInfo() {
+	if a.config.HcNetCoreURL == "" {
 		return
 	}
 
 	core := &hcnetcore.Client{
-		URL: a.config.HcnetCoreURL,
+		URL: a.config.HcNetCoreURL,
 	}
 
 	resp, err := core.Info(context.Background())
@@ -340,7 +357,7 @@ func (a *App) Tick() {
 	wg.Add(3)
 	go func() { a.UpdateLedgerState(); wg.Done() }()
 	go func() { a.UpdateOperationFeeStatsState(); wg.Done() }()
-	go func() { a.UpdateHcnetCoreInfo(); wg.Done() }()
+	go func() { a.UpdateHcNetCoreInfo(); wg.Done() }()
 	wg.Wait()
 
 	if a.ingester != nil {
@@ -360,7 +377,82 @@ func (a *App) Tick() {
 // Init initializes app, using the config to populate db connections and
 // whatnot.
 func (a *App) init() {
-	appInit.Run(a)
+	// app-context
+	a.ctx, a.cancel = context.WithCancel(context.Background())
+
+	// log
+	log.DefaultLogger.Logger.Level = a.config.LogLevel
+	log.DefaultLogger.Logger.Hooks.Add(logmetrics.DefaultMetrics)
+
+	// sentry
+	initSentry(a)
+
+	// loggly
+	initLogglyLog(a)
+
+	// hcnetCoreInfo
+	a.UpdateHcNetCoreInfo()
+
+	// aurora-db and core-db
+	mustInitAuroraDB(a)
+	mustInitCoreDB(a)
+
+	// ingester
+	initIngester(a)
+
+	var orderBookGraph *orderbook.OrderBookGraph
+	if a.config.EnableExperimentalIngestion {
+		orderBookGraph = orderbook.NewOrderBookGraph()
+		// expingester
+		initExpIngester(a, orderBookGraph)
+	}
+
+	// txsub
+	initSubmissionSystem(a)
+
+	// path-finder
+	initPathFinder(a, orderBookGraph)
+
+	// reaper
+	a.reaper = reap.New(a.config.HistoryRetentionCount, a.AuroraSession(context.Background()))
+
+	// web.init
+	a.web = mustInitWeb(a.ctx, a.historyQ, a.coreQ, a.config.SSEUpdateFrequency, a.config.StaleThreshold, a.config.IngestFailedTransactions)
+
+	// web.rate-limiter
+	a.web.rateLimiter = maybeInitWebRateLimiter(a.config.RateQuota)
+
+	// web.middleware
+	// Note that we passed in `a` here for putting the whole App in the context.
+	// This parameter will be removed soon.
+	a.web.mustInstallMiddlewares(a, a.config.ConnectionTimeout)
+
+	// web.actions
+	a.web.mustInstallActions(
+		a.config.EnableAssetStats,
+		a.config.FriendbotURL,
+	)
+
+	// metrics and log.metrics
+	a.metrics = metrics.NewRegistry()
+	for level, meter := range *logmetrics.DefaultMetrics {
+		a.metrics.Register(fmt.Sprintf("logging.%s", level), meter)
+	}
+
+	// db-metrics
+	initDbMetrics(a)
+
+	// web.metrics
+	initWebMetrics(a)
+
+	// txsub.metrics
+	initTxSubMetrics(a)
+
+	// ingester.metrics
+	initIngesterMetrics(a)
+
+	// redis
+	initRedis(a)
 }
 
 // run is the function that runs in the background that triggers Tick each
@@ -377,8 +469,8 @@ func (a *App) run() {
 	}
 }
 
-// Context create a context on from the App type.
-func (a *App) Context(ctx context.Context) context.Context {
+// withAppContext create a context on from the App type.
+func withAppContext(ctx context.Context, a *App) context.Context {
 	return context.WithValue(ctx, &auroraContext.AppContextKey, a)
 }
 

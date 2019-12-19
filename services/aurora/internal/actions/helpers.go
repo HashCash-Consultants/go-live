@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"mime"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"github.com/hcnet/go/amount"
 	"github.com/hcnet/go/services/aurora/internal/assets"
 	"github.com/hcnet/go/services/aurora/internal/db2"
+	"github.com/hcnet/go/services/aurora/internal/httpx"
 	"github.com/hcnet/go/services/aurora/internal/ledger"
 	hProblem "github.com/hcnet/go/services/aurora/internal/render/problem"
 	"github.com/hcnet/go/services/aurora/internal/toid"
@@ -21,6 +23,8 @@ import (
 	"github.com/hcnet/go/xdr"
 )
 
+// TODO: move these constants to urlparam.go as we should parse the params with http handlers
+// in the upper level package.
 const (
 	// ParamCursor is a query string param name
 	ParamCursor = "cursor"
@@ -73,6 +77,27 @@ func (base *Base) checkUTF8(name, value string) {
 	if !utf8.ValidString(value) {
 		base.SetInvalidField(name, errors.New("invalid value"))
 	}
+}
+
+// GetStringFromURLParam retrieves a string from the URLParams.
+func (base *Base) GetStringFromURLParam(name string) string {
+	if base.Err != nil {
+		return ""
+	}
+
+	fromURL, ok := base.GetURLParam(name)
+	if ok {
+		ret, err := url.PathUnescape(fromURL)
+		if err != nil {
+			base.SetInvalidField(name, err)
+			return ""
+		}
+
+		base.checkUTF8(name, ret)
+		return ret
+	}
+
+	return ""
 }
 
 // GetString retrieves a string from either the URLParams, form or query string.
@@ -147,7 +172,7 @@ func (base *Base) GetInt32(name string) int32 {
 	return int32(asI64)
 }
 
-// GetBool retrieves a bool from the action parameter of the given name.
+// GetBool retrieves a bool from the query parameter for the given name.
 // Populates err if the value is not a valid bool.
 // Defaults to `false` in case of an empty string. WARNING, do not change
 // this behaviour without checking other modules, ex. this is critical
@@ -157,7 +182,7 @@ func (base *Base) GetBool(name string) bool {
 		return false
 	}
 
-	asStr := base.GetString(name)
+	asStr := base.R.URL.Query().Get(name)
 	if asStr == "" {
 		return false
 	}
@@ -252,6 +277,7 @@ func (base *Base) GetAddress(name string, opts ...Opt) (result string) {
 		}
 	}
 
+	// We should check base.Err after this call. This is why it's better to remove base.Err.
 	result = base.GetString(name)
 	if result == "" && !requiredParam {
 		return result
@@ -471,4 +497,16 @@ func (base *Base) ValidateBodyType() {
 	if mt != "application/x-www-form-urlencoded" && mt != "multipart/form-data" {
 		base.Err = &hProblem.UnsupportedMediaType
 	}
+}
+
+// fullURL returns a URL containing the information regarding the original
+// request stored in the context.
+func fullURL(ctx context.Context) *url.URL {
+	url := httpx.BaseURL(ctx)
+	r := httpx.RequestFromContext(ctx)
+	if r != nil {
+		url.Path = r.URL.Path
+		url.RawQuery = r.URL.RawQuery
+	}
+	return url
 }

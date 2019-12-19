@@ -32,9 +32,9 @@ func (s *Server) Start() error {
 	// Register callbacks
 	s.BitcoinListener.TransactionHandler = s.onNewBitcoinTransaction
 	s.EthereumListener.TransactionHandler = s.onNewEthereumTransaction
-	s.HcnetAccountConfigurator.OnAccountCreated = s.onHcnetAccountCreated
-	s.HcnetAccountConfigurator.OnExchanged = s.onExchanged
-	s.HcnetAccountConfigurator.OnExchangedTimelocked = s.OnExchangedTimelocked
+	s.HcNetAccountConfigurator.OnAccountCreated = s.onHcNetAccountCreated
+	s.HcNetAccountConfigurator.OnExchanged = s.onExchanged
+	s.HcNetAccountConfigurator.OnExchangedTimelocked = s.OnExchangedTimelocked
 
 	if !s.BitcoinListener.Enabled && !s.EthereumListener.Enabled {
 		return errors.New("At least one listener (BitcoinListener or EthereumListener) must be enabled")
@@ -78,9 +78,9 @@ func (s *Server) Start() error {
 		s.log.Warn("EthereumListener disabled")
 	}
 
-	err := s.HcnetAccountConfigurator.Start()
+	err := s.HcNetAccountConfigurator.Start()
 	if err != nil {
-		return errors.Wrap(err, "Error starting HcnetAccountConfigurator")
+		return errors.Wrap(err, "Error starting HcNetAccountConfigurator")
 	}
 
 	err = s.SSEServer.StartPublishing()
@@ -272,5 +272,4 @@ func (s *Server) HandlerRecoveryTransaction(w stdhttp.ResponseWriter, r *stdhttp
 	}
 
 	w.WriteHeader(stdhttp.StatusOK)
-	return
 }
