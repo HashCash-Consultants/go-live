@@ -3,17 +3,17 @@ package protocols
 import (
 	"fmt"
 
-	"github.com/hcnet/go/build"
 	shared "github.com/hcnet/go/services/internal/bridge-compliance-shared"
 	"github.com/hcnet/go/support/errors"
+	"github.com/hcnet/go/txnbuild"
 )
 
 // ToBaseAsset transforms Asset to github.com/hcnet/go-hcnet-base/build.Asset
-func (a Asset) ToBaseAsset() build.Asset {
+func (a Asset) ToBaseAsset() txnbuild.Asset {
 	if a.Code == "" && a.Issuer == "" {
-		return build.NativeAsset()
+		return txnbuild.NativeAsset{}
 	}
-	return build.CreditAsset(a.Code, a.Issuer)
+	return txnbuild.CreditAsset{Code: a.Code, Issuer: a.Issuer}
 }
 
 // String returns string representation of this asset

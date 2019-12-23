@@ -71,7 +71,7 @@ is funded it does not truly exist!
 
 ## Funding your account
 
-The Hcnet test network provides the Friendbot, a tool that developers
+The HcNet test network provides the Friendbot, a tool that developers
 can use to get testnet lumens for testing purposes. To fund your account, simply
 execute the following curl command:
 
@@ -90,7 +90,7 @@ succeeds, you should see a response like:
 }
 ```
 
-After a few seconds, the Hcnet network will perform consensus, close the
+After a few seconds, the HcNet network will perform consensus, close the
 ledger, and your account will have been created.  Next up we will write a command
 that watches for new payments to your account and outputs a message to the
 terminal.
@@ -183,16 +183,16 @@ Sequence number can be found under the `sequence` field. The current sequence nu
 Now, create `make_payment.js` file and paste the following code into it:
 
 ```js
-var HcnetBase = require("hcnet-base");
-HcnetBase.Network.useTestNetwork();
+var HcNetBase = require("hcnet-base");
+HcNetBase.Network.useTestNetwork();
 
-var keypair = HcnetBase.Keypair.fromSecret('SCU36VV2OYTUMDSSU4EIVX4UUHY3XC7N44VL4IJ26IOG6HVNC7DY5UJO');
-var account = new HcnetBase.Account(keypair.publicKey(), "713226564141056");
+var keypair = HcNetBase.Keypair.fromSecret('SCU36VV2OYTUMDSSU4EIVX4UUHY3XC7N44VL4IJ26IOG6HVNC7DY5UJO');
+var account = new HcNetBase.Account(keypair.publicKey(), "713226564141056");
 
 var amount = "100";
-var transaction = new HcnetBase.TransactionBuilder(account)
-  .addOperation(HcnetBase.Operation.createAccount({
-    destination: HcnetBase.Keypair.random().publicKey(),
+var transaction = new HcNetBase.TransactionBuilder(account)
+  .addOperation(HcNetBase.Operation.createAccount({
+    destination: HcNetBase.Keypair.random().publicKey(),
     startingBalance: amount
   }))
   .build();

@@ -22,7 +22,7 @@ func (m *MockDatabase) GetAssociationByChainAddress(chain Chain, address string)
 	return a.Get(0).(*AddressAssociation), a.Error(1)
 }
 
-func (m *MockDatabase) GetAssociationByHcnetPublicKey(hcnetPublicKey string) (*AddressAssociation, error) {
+func (m *MockDatabase) GetAssociationByHcNetPublicKey(hcnetPublicKey string) (*AddressAssociation, error) {
 	a := m.Called(hcnetPublicKey)
 	return a.Get(0).(*AddressAssociation), a.Error(1)
 }

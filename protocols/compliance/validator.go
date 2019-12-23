@@ -7,10 +7,10 @@ import (
 
 func init() {
 	govalidator.SetFieldsRequiredByDefault(true)
-	govalidator.CustomTypeTagMap.Set("hcnet_address", govalidator.CustomTypeValidator(isHcnetAddress))
+	govalidator.CustomTypeTagMap.Set("hcnet_address", govalidator.CustomTypeValidator(isHcNetAddress))
 }
 
-func isHcnetAddress(i interface{}, context interface{}) bool {
+func isHcNetAddress(i interface{}, context interface{}) bool {
 	addr, ok := i.(string)
 
 	if !ok {
@@ -19,9 +19,5 @@ func isHcnetAddress(i interface{}, context interface{}) bool {
 
 	_, _, err := address.Split(addr)
 
-	if err == nil {
-		return true
-	}
-
-	return false
+	return err == nil
 }

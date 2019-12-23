@@ -1,4 +1,4 @@
-// Package federation provides a pluggable handler that satisfies the Hcnet
+// Package federation provides a pluggable handler that satisfies the HcNet
 // federation protocol.  Add an instance of `Handler` onto your router to allow
 // a server to satisfy the protocol.
 //
@@ -42,7 +42,7 @@ func (response ErrorResponse) Error() string {
 }
 
 // Handler represents an http handler that can service http requests that
-// conform to the Hcnet federation protocol.  This handler should be added to
+// conform to the HcNet federation protocol.  This handler should be added to
 // your chosen mux at the path `/federation` (and for good measure
 // `/federation/` if your middleware doesn't normalize trailing slashes).
 type Handler struct {

@@ -1,7 +1,7 @@
 run_recipe File.dirname(__FILE__) + "/_common_accounts.rb"
 
 use_manual_close
-KP = Hcnet::KeyPair
+KP = HcNet::KeyPair
 
 close_ledger #1
 
@@ -65,3 +65,6 @@ payment :multiop, :master,  [:native, "10.00"] do |env|
     env.tx.fee = 400
     env.signatures = [env.tx.sign_decorated(get_account :multiop)]
   end
+
+
+close_ledger #8

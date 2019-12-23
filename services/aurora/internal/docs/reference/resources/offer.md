@@ -2,7 +2,7 @@
 title: Offer
 ---
 
-Accounts on the Hcnet network can make [offers](http://hcnet.org/developers/learn/concepts/exchange.html) to buy or sell assets.  Users can create offers with the [Manage Offer](http://hcnet.org/developers/learn/concepts/list-of-operations.html) operation.
+Accounts on the HcNet network can make [offers](http://hcnet.org/developers/learn/concepts/exchange.html) to buy or sell assets.  Users can create offers with the [Manage Offer](http://hcnet.org/developers/learn/concepts/list-of-operations.html) operation.
 
 Aurora only returns offers that belong to a particular account.  When it does, it uses the following format:
 

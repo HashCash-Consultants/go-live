@@ -22,7 +22,7 @@ type Client struct {
 	// http.DefaultClient will be used.
 	HTTP HTTP
 
-	// URL of Hcnet Core server to connect.
+	// URL of HcNet Core server to connect.
 	URL string
 }
 

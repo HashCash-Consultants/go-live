@@ -6,8 +6,8 @@ import (
 	"github.com/hcnet/go/services/bifrost/sse"
 )
 
-func (s *Server) onHcnetAccountCreated(destination string) {
-	association, err := s.Database.GetAssociationByHcnetPublicKey(destination)
+func (s *Server) onHcNetAccountCreated(destination string) {
+	association, err := s.Database.GetAssociationByHcNetPublicKey(destination)
 	if err != nil {
 		s.log.WithField("err", err).Error("Error getting association")
 		return
@@ -22,7 +22,7 @@ func (s *Server) onHcnetAccountCreated(destination string) {
 }
 
 func (s *Server) onExchanged(destination string) {
-	association, err := s.Database.GetAssociationByHcnetPublicKey(destination)
+	association, err := s.Database.GetAssociationByHcNetPublicKey(destination)
 	if err != nil {
 		s.log.WithField("err", err).Error("Error getting association")
 		return
@@ -37,7 +37,7 @@ func (s *Server) onExchanged(destination string) {
 }
 
 func (s *Server) OnExchangedTimelocked(destination, transaction string) {
-	association, err := s.Database.GetAssociationByHcnetPublicKey(destination)
+	association, err := s.Database.GetAssociationByHcNetPublicKey(destination)
 	if err != nil {
 		s.log.WithField("err", err).Error("Error getting association")
 		return

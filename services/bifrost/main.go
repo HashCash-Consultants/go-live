@@ -31,7 +31,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "bifrost",
-	Short: "Bridge server to allow participating in Hcnet based ICOs using Bitcoin and Ethereum",
+	Short: "Bridge server to allow participating in HcNet based ICOs using Bitcoin and Ethereum",
 }
 
 var serverCmd = &cobra.Command{
@@ -109,7 +109,7 @@ This command will create 3 server.Server's listening on ports 8000-8002.`,
 		for i := 0; i < numServers; i++ {
 			go func(i int) {
 				cfg.Port = ports[i]
-				cfg.Hcnet.SignerSecretKey = signers[i]
+				cfg.HcNet.SignerSecretKey = signers[i]
 				server := createServer(cfg, true)
 				// Replace clients in listeners with random transactions generators
 				server.BitcoinListener.Client = bitcoinClient
@@ -129,15 +129,16 @@ This command will create 3 server.Server's listening on ports 8000-8002.`,
 		accounts := make(chan server.GenerateAddressResponse)
 		users := stress.Users{
 			Aurora: &aurora.Client{
-				URL: cfg.Hcnet.Aurora,
+				URL: cfg.HcNet.Aurora,
 				HTTP: &http.Client{
 					Timeout: 60 * time.Second,
 				},
+				AppName: "bifrost",
 			},
-			NetworkPassphrase: cfg.Hcnet.NetworkPassphrase,
+			NetworkPassphrase: cfg.HcNet.NetworkPassphrase,
 			UsersPerSecond:    usersPerSecond,
 			BifrostPorts:      ports,
-			IssuerPublicKey:   cfg.Hcnet.IssuerPublicKey,
+			IssuerPublicKey:   cfg.HcNet.IssuerPublicKey,
 		}
 		go users.Start(accounts)
 		for {
@@ -375,17 +376,17 @@ func createServer(cfg config.Config, stressTest bool) *server.Server {
 	}
 
 	hcnetAccountConfigurator := &hcnet.AccountConfigurator{
-		NetworkPassphrase:     cfg.Hcnet.NetworkPassphrase,
-		IssuerPublicKey:       cfg.Hcnet.IssuerPublicKey,
-		DistributionPublicKey: cfg.Hcnet.DistributionPublicKey,
-		SignerSecretKey:       cfg.Hcnet.SignerSecretKey,
-		NeedsAuthorize:        cfg.Hcnet.NeedsAuthorize,
-		TokenAssetCode:        cfg.Hcnet.TokenAssetCode,
-		StartingBalance:       cfg.Hcnet.StartingBalance,
-		LockUnixTimestamp:     cfg.Hcnet.LockUnixTimestamp,
+		NetworkPassphrase:     cfg.HcNet.NetworkPassphrase,
+		IssuerPublicKey:       cfg.HcNet.IssuerPublicKey,
+		DistributionPublicKey: cfg.HcNet.DistributionPublicKey,
+		SignerSecretKey:       cfg.HcNet.SignerSecretKey,
+		NeedsAuthorize:        cfg.HcNet.NeedsAuthorize,
+		TokenAssetCode:        cfg.HcNet.TokenAssetCode,
+		StartingBalance:       cfg.HcNet.StartingBalance,
+		LockUnixTimestamp:     cfg.HcNet.LockUnixTimestamp,
 	}
 
-	if cfg.Hcnet.StartingBalance == "" {
+	if cfg.HcNet.StartingBalance == "" {
 		hcnetAccountConfigurator.StartingBalance = "2.1"
 	}
 
@@ -398,10 +399,11 @@ func createServer(cfg config.Config, stressTest bool) *server.Server {
 	}
 
 	auroraClient := &aurora.Client{
-		URL: cfg.Hcnet.Aurora,
+		URL: cfg.HcNet.Aurora,
 		HTTP: &http.Client{
 			Timeout: 20 * time.Second,
 		},
+		AppName: "bifrost",
 	}
 
 	sseServer := &sse.Server{}

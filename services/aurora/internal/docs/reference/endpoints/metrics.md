@@ -51,7 +51,7 @@ Aurora utilizes Go's built in concurrency primitives ([goroutines](https://gobye
 
 #### History
 
-Aurora maintains its own database (postgres), a verbose and user friendly account of activity on the Hcnet network.
+Aurora maintains its own database (postgres), a verbose and user friendly account of activity on the HcNet network.
 
 |    Metric     |  Description                                                                                                                               |
 | ---------------- |  ------------------------------------------------------------------------------------------------------------------------------ |
@@ -73,7 +73,7 @@ Aurora maintains its own database (postgres), a verbose and user friendly accoun
 ```
 
 #### Ingester
-Ingester represents metrics specific to Aurora's [ingestion](https://github.com/hcnet/go/blob/master/services/aurora/internal/docs/reference/admin.md#ingesting-hcnet-core-data) process, or the process by which Aurora consumes transaction results from a connected Hcnet Core instance.
+Ingester represents metrics specific to Aurora's [ingestion](https://github.com/hcnet/go/blob/master/services/aurora/internal/docs/reference/admin.md#ingesting-hcnet-core-data) process, or the process by which Aurora consumes transaction results from a connected HcNet Core instance.
 
 |    Metric     |  Description                                                                                                                               |
 | ---------------- |  ------------------------------------------------------------------------------------------------------------------------------ |
@@ -214,13 +214,13 @@ These metrics contain useful [sub metrics](#sub-metrics).
 },
 ```
 
-#### Hcnet Core
-As noted above, Aurora relies on Hcnet Core to stay in sync with the Hcnet network. These metrics are specific to the underlying Hcnet Core instance.
+#### HcNet Core
+As noted above, Aurora relies on HcNet Core to stay in sync with the HcNet network. These metrics are specific to the underlying HcNet Core instance.
 
 |    Metric     |  Description                                                                                                                               |
 | ---------------- |  ------------------------------------------------------------------------------------------------------------------------------ |
-| latest_ledger    | The sequence number of the latest (most recent) ledger recorded in Hcnet Core's database.  |
-| open_connections | The number of open connections to the Hcnet Core postgres database.  |
+| latest_ledger    | The sequence number of the latest (most recent) ledger recorded in HcNet Core's database.  |
+| open_connections | The number of open connections to the HcNet Core postgres database.  |
 
 ##### *Example Response:*
 ```shell
@@ -234,7 +234,7 @@ As noted above, Aurora relies on Hcnet Core to stay in sync with the Hcnet netwo
 
 #### Transaction Submission
 
-Aurora does not submit transactions directly to the Hcnet network. Instead, it sequences transactions and sends the base64 encoded, XDR serialized blob to its connected Hcnet Core instance. 
+Aurora does not submit transactions directly to the HcNet network. Instead, it sequences transactions and sends the base64 encoded, XDR serialized blob to its connected HcNet Core instance. 
 
 ##### Aurora Transaction Sequencing and Submission
 

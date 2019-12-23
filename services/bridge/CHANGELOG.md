@@ -4,6 +4,20 @@ As this project is pre 1.0, breaking changes may happen for minor version bumps.
 
 ## Unreleased
 
+* Fixed path-payment operation in `/payment`
+
+## 0.0.32
+
+* Bridge server now uses the new Go SDK.
+* Unit tests added.
+
+## Breaking changes
+
+* MySQL is no longer supported. To migrate your data to postgresql use any of the tools provided [here](https://wiki.postgresql.org/wiki/Converting_from_other_Databases_to_PostgreSQL#MySQL).
+
+* Requests to `/builder` for `AllowTrust` operations must specify the source account for the operation.
+
+
 ## Changes
 * Payload MAC authentication uses `X-Payload-Mac` header (old `X_PAYLOAD_MAC` header is still provided for backward compatibility, but it is deprecated and will be removed in future versions).
 
@@ -161,7 +175,7 @@ Please migrate your `bridge` DB before running a new version using: `bridge --mi
 
 * Send `create_account` operation in `/payment` if account does not exist.
 * Fixed major bug in `PaymentListener`.
-* Sending to Hcnet address with memo in `/send`.
+* Sending to HcNet address with memo in `/send`.
 * Standardized responses.
 * Updated README file.
 
@@ -172,7 +186,7 @@ Please migrate your `bridge` DB before running a new version using: `bridge --mi
 * Added config parameters validation.
 * Added `network_passphrase` config parameter.
 * `postgres` migration files.
-* Fixed sending to Hcnet address.
+* Fixed sending to HcNet address.
 * Fixed `aurora.AccountResponse.SequenceNumber` bug.
 * Fixed minor bugs.
 * Code refactoring.

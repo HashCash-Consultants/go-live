@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
-	log "github.com/sirupsen/logrus"
 	"net/http"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/hcnet/go/keypair"
 	"github.com/hcnet/go/services/internal/bridge-compliance-shared/http/helpers"

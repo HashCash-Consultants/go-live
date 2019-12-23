@@ -12,7 +12,7 @@ If called in streaming mode Aurora will start at the earliest known operation un
 ## Request
 
 ```
-GET /accounts/{account}/operations{?cursor,limit,order}
+GET /accounts/{account}/operations{?cursor,limit,order,include_failed}
 ```
 
 ### Arguments
@@ -24,6 +24,7 @@ GET /accounts/{account}/operations{?cursor,limit,order}
 | `?order` | optional, string, default `asc`| The order in which to return rows, "asc" or "desc".              | `asc`                                                     |
 | `?limit` | optional, number, default `10` | Maximum number of records to return.                             | `200`
 | `?include_failed` | optional, bool, default: `false` | Set to `true` to include operations of failed transactions in results. | `true` |                                                     |
+| `?join` | optional, string, default: _null_ | Set to `transactions` to include the transactions which created each of the operations in the response. | `transactions` |
 
 ### curl Example Request
 
@@ -34,8 +35,8 @@ curl "https://aurora-testnet.hcnet.org/accounts/GA2HGBJIJKI6O4XEM7CZWY5PS6GKSXL6
 ### JavaScript Example Request
 
 ```js
-var HcnetSdk = require('hcnet-sdk');
-var server = new HcnetSdk.Server('https://aurora-testnet.hcnet.org');
+var HcNetSdk = require('hcnet-sdk');
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
 
 server.operations()
   .forAccount("GAKLBGHNHFQ3BMUYG5KU4BEWO6EYQHZHAXEWC33W34PH2RBHZDSQBD75")
@@ -46,6 +47,24 @@ server.operations()
   .catch(function (err) {
     console.log(err)
   })
+```
+
+### JavaScript Streaming Example
+
+```javascript
+var HcNetSdk = require('hcnet-sdk')
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
+
+var operationHandler = function (operationResponse) {
+    console.log(operationResponse);
+};
+
+var es = server.operations()
+    .forAccount("GAKLBGHNHFQ3BMUYG5KU4BEWO6EYQHZHAXEWC33W34PH2RBHZDSQBD75")
+    .cursor('now')
+    .stream({
+        onmessage: operationHandler
+    })
 ```
 
 ## Response

@@ -1,10 +1,15 @@
 # Clients package
 
-Packages contained by this package provide client libraries for accessing the ecosystem of hcnet services.  At present, it only contains a simple aurora client library, but in the future it will contain clients to interact with hcnet-core, federation, the bridge server and more.
+Packages here provide client libraries for accessing the ecosystem of HcNet services.
 
-See [godoc](https://godoc.org/github.com/hcnet/go/clients) for details about each package.
+* `auroraclient` - programmatic client access to Aurora (use in conjunction with [txnbuild](../txnbuild))
+* `hcnettoml` - parse HcNet.toml files from the internet
+* `federation` - resolve federation addresses into hcnet account IDs, suitable for use within a transaction
+* `aurora` (DEPRECATED) - the original Aurora client, now superceded by `auroraclient`
 
-## Adding new client packages
+See [GoDoc](https://godoc.org/github.com/hcnet/go/clients) for more details.
+
+## For developers: Adding new client packages
 
 Ideally, each one of our client packages will have commonalities in their API to ease the cost of learning each.  It's recommended that we follow a pattern similar to the `net/http` package's client shape:
 

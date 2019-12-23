@@ -10,7 +10,7 @@ import (
 )
 
 // onNewBitcoinTransaction checks if transaction is valid and adds it to
-// the transactions queue for HcnetAccountConfigurator to consume.
+// the transactions queue for HcNetAccountConfigurator to consume.
 //
 // Transaction added to transactions queue should be in a format described in
 // queue.Transaction (especialy amounts). Pooling service should not have to deal with any
@@ -58,8 +58,8 @@ func (s *Server) onNewBitcoinTransaction(transaction bitcoin.Transaction) error 
 		TransactionID: transaction.Hash,
 		AssetCode:     queue.AssetCodeBTC,
 		// Amount in the base unit of currency.
-		Amount:           transaction.ValueToHcnet(),
-		HcnetPublicKey: addressAssociation.HcnetPublicKey,
+		Amount:           transaction.ValueToHcNet(),
+		HcNetPublicKey: addressAssociation.HcNetPublicKey,
 	}
 
 	err = s.TransactionsQueue.QueueAdd(queueTx)

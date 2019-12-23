@@ -13,6 +13,12 @@ For each new version we will only track changes from the previous version.
 
 ## Changes
 
+### Unreleased
+
+#### Changes
+
+* Operations responses may include a `transaction` field which represents the transaction that created the operation.
+
 ### 0.15.0
 
 #### SDKs with full support
@@ -95,7 +101,7 @@ instead of per request.
 
 #### Changes
 
-- `amount` field in `/assets` is now a String (to support Hcnet amounts larger than `int64`).
+- `amount` field in `/assets` is now a String (to support HcNet amounts larger than `int64`).
 - Effect resource contains a new `created_at` field.
 
 | Resource                                 | Changes                                      | Go SDK <sup>1</sup> | JS SDK             | Java SDK |

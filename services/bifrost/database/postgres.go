@@ -54,7 +54,7 @@ type transactionsQueueRow struct {
 	TransactionID    string          `db:"transaction_id"`
 	AssetCode        queue.AssetCode `db:"asset_code"`
 	Amount           string          `db:"amount"`
-	HcnetPublicKey string          `db:"hcnet_public_key"`
+	HcNetPublicKey string          `db:"hcnet_public_key"`
 }
 
 type processedTransactionRow struct {
@@ -74,7 +74,7 @@ func fromQueueTransaction(tx queue.Transaction) *transactionsQueueRow {
 		TransactionID:    tx.TransactionID,
 		AssetCode:        tx.AssetCode,
 		Amount:           tx.Amount,
-		HcnetPublicKey: tx.HcnetPublicKey,
+		HcNetPublicKey: tx.HcNetPublicKey,
 	}
 }
 
@@ -87,7 +87,7 @@ func (r *transactionsQueueRow) toQueueTransaction() *queue.Transaction {
 		TransactionID:    r.TransactionID,
 		AssetCode:        r.AssetCode,
 		Amount:           r.Amount,
-		HcnetPublicKey: r.HcnetPublicKey,
+		HcNetPublicKey: r.HcNetPublicKey,
 	}
 }
 
@@ -152,7 +152,7 @@ func (d *PostgresDatabase) CreateAddressAssociation(chain Chain, hcnetAddress, a
 		Chain:            chain,
 		AddressIndex:     addressIndex,
 		Address:          address,
-		HcnetPublicKey: hcnetAddress,
+		HcNetPublicKey: hcnetAddress,
 		CreatedAt:        time.Now(),
 	}
 
@@ -177,7 +177,7 @@ func (d *PostgresDatabase) GetAssociationByChainAddress(chain Chain, address str
 	return row, nil
 }
 
-func (d *PostgresDatabase) GetAssociationByHcnetPublicKey(hcnetPublicKey string) (*AddressAssociation, error) {
+func (d *PostgresDatabase) GetAssociationByHcNetPublicKey(hcnetPublicKey string) (*AddressAssociation, error) {
 	addressAssociationTable := d.getTable(addressAssociationTableName, nil)
 	row := &AddressAssociation{}
 	where := map[string]interface{}{"hcnet_public_key": hcnetPublicKey}

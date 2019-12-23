@@ -12,18 +12,26 @@ import (
 // app's main function and is provided to NewApp.
 type Config struct {
 	DatabaseURL            string
-	HcnetCoreDatabaseURL string
-	HcnetCoreURL         string
+	HcNetCoreDatabaseURL string
+	HcNetCoreURL         string
+	HistoryArchiveURLs     []string
 	Port                   uint
-	MaxDBConnections       int
-	SSEUpdateFrequency     time.Duration
-	ConnectionTimeout      time.Duration
-	RateLimit              *throttled.RateQuota
-	RateLimitRedisKey      string
-	RedisURL               string
-	FriendbotURL           *url.URL
-	LogLevel               logrus.Level
-	LogFile                string
+
+	// MaxDBConnections has a priority over all 4 values below.
+	MaxDBConnections            int
+	AuroraDBMaxOpenConnections int
+	AuroraDBMaxIdleConnections int
+	CoreDBMaxOpenConnections    int
+	CoreDBMaxIdleConnections    int
+
+	SSEUpdateFrequency time.Duration
+	ConnectionTimeout  time.Duration
+	RateQuota          *throttled.RateQuota
+	RateLimitRedisKey  string
+	RedisURL           string
+	FriendbotURL       *url.URL
+	LogLevel           logrus.Level
+	LogFile            string
 	// MaxPathLength is the maximum length of the path returned by `/paths` endpoint.
 	MaxPathLength     uint
 	NetworkPassphrase string
@@ -36,8 +44,21 @@ type Config struct {
 	TLSKey string
 	// Ingest toggles whether this aurora instance should run the data ingestion subsystem.
 	Ingest bool
+	// EnableExperimentalIngestion  a feature flag that enables the exprimental ingestion subsystem.
+	// If this flag is true then the following features in aurora will be available:
+	// * In-Memory path finding
+	// * Accounts for signers endpoint
+	EnableExperimentalIngestion bool
+	// IngestStateReaderTempSet defines where to store temporary objects during state
+	// ingestion. Possible options are `memory` and `postgres`.
+	IngestStateReaderTempSet string
 	// IngestFailedTransactions toggles whether to ingest failed transactions
 	IngestFailedTransactions bool
+	// CursorName is the cursor used for ingesting from hcnet-core.
+	// Setting multiple cursors in different Aurora instances allows multiple
+	// Auroras to ingest from the same hcnet-core instance without cursor
+	// collisions.
+	CursorName string
 	// HistoryRetentionCount represents the minimum number of ledgers worth of
 	// history data to retain in the aurora database. For the purposes of
 	// determining a "retention duration", each ledger roughly corresponds to 10

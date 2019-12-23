@@ -27,8 +27,8 @@ curl "https://aurora-testnet.hcnet.org/ledgers/69859"
 ### JavaScript Example Request
 
 ```js
-var HcnetSdk = require('hcnet-sdk')
-var server = new HcnetSdk.Server('https://aurora-testnet.hcnet.org');
+var HcNetSdk = require('hcnet-sdk')
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
 
 server.ledgers()
   .ledger('69858')

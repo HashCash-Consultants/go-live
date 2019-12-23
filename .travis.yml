@@ -9,9 +9,9 @@ addons:
   ssh_known_hosts:
   - bitbucket.org
 go:
-- '1.9'
 - '1.10'
 - '1.11'
+- '1.12'
 - tip
 go_import_path: github.com/hcnet/go
 before_install:
@@ -21,12 +21,22 @@ before_install:
     echo "Searching for deprecated values in Aurora..."
     ! egrep -irn -A 1 --include=*.go "Deprecated.+-.+remove.+in:.+$TRAVIS_TAG" ./services/aurora/ ./protocols/aurora/
   fi
-- ./gofmt.sh
+- |
+  # Only run format checks on the recommended developer version of Go
+  DEVEL_GO_VERSION='1.12'
+  if [ "$TRAVIS_GO_VERSION" != "$DEVEL_GO_VERSION" ]; then
+    echo "Skipping gofmt checks for this version of Go..."
+  else
+    ./gofmt.sh
+  fi
 - ./govet.sh
 install:
 - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 script:
 - dep ensure -v && ./support/scripts/run_tests
+cache:
+  directories:
+    - $GOPATH/pkg/dep # cache dep downloaded dependencies
 before_deploy:
 - go run ./support/scripts/build_release_artifacts/main.go
 - ./support/scripts/push_snapshots_tag.sh

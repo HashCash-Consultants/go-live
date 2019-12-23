@@ -3,7 +3,7 @@ title: XDR
 ---
 
 **XDR**, also known as _External Data Representation_, is used extensively in
-the Hcnet Network, especially in the core protocol.  The ledger, transactions, results,
+the HcNet Network, especially in the core protocol.  The ledger, transactions, results,
 history, and even the messages passed between computers running hcnet-core
 are encoded using XDR.
 
@@ -21,5 +21,5 @@ into a byte stream, then decode the XDR into an in-memory data structure.
 ## .X files
 
 Data structures in XDR are specified in an _interface definition file_ (IDL).
-The IDL files used for the Hcnet Network are available
+The IDL files used for the HcNet Network are available
 [on GitHub](https://github.com/hcnet/hcnet-core/tree/master/src/xdr).

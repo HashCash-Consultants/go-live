@@ -23,8 +23,8 @@ func NewTestApp() *App {
 func NewTestConfig() Config {
 	return Config{
 		DatabaseURL:            test.DatabaseURL(),
-		HcnetCoreDatabaseURL: test.HcnetCoreDatabaseURL(),
-		RateLimit: &throttled.RateQuota{
+		HcNetCoreDatabaseURL: test.HcNetCoreDatabaseURL(),
+		RateQuota: &throttled.RateQuota{
 			MaxRate:  throttled.PerHour(1000),
 			MaxBurst: 100,
 		},

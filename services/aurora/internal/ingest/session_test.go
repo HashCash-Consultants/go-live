@@ -94,8 +94,7 @@ func Test_ingestBumpSeq(t *testing.T) {
 	q := &history.Q{Session: tt.AuroraSession()}
 
 	//ensure bumpseq operations
-	var ops []history.Operation
-	err := q.Operations().ForAccount("GCQZP3IU7XU6EJ63JZXKCQOYT2RNXN3HB5CNHENNUEUHSMA4VUJJJSEN").Select(&ops)
+	ops, _, err := q.Operations().ForAccount("GCQZP3IU7XU6EJ63JZXKCQOYT2RNXN3HB5CNHENNUEUHSMA4VUJJJSEN").Fetch()
 	tt.Require.NoError(err)
 	if tt.Assert.Len(ops, 5) {
 		//first is create account, and then bump sequences
@@ -117,7 +116,6 @@ func Test_ingestBumpSeq(t *testing.T) {
 			NewSq int64 `json:"new_seq"`
 		}{}
 		err = testEffect.UnmarshalDetails(&details)
-		println(details.NewSq)
 		tt.Assert.Equal(int64(300000000000), details.NewSq)
 	}
 }

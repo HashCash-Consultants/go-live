@@ -5,7 +5,7 @@ clientData:
 ---
 
 This endpoint represents all [ledgers](../resources/ledger.md).
-This endpoint can also be used in [streaming](../streaming.md) mode so it is possible to use it to get notifications as ledgers are closed by the Hcnet network.
+This endpoint can also be used in [streaming](../streaming.md) mode so it is possible to use it to get notifications as ledgers are closed by the HcNet network.
 If called in streaming mode Aurora will start at the earliest known ledger unless a `cursor` is set. In that case it will start from the `cursor`. You can also set `cursor` value to `now` to only stream ledgers created since your request time.
 
 ## Request
@@ -31,7 +31,7 @@ curl "https://aurora-testnet.hcnet.org/ledgers?limit=200&order=desc"
 
 ### JavaScript Example Request
 
-```js
+```javascript
 server.ledgers()
   .call()
   .then(function (ledgerResult) {
@@ -47,6 +47,25 @@ server.ledgers()
     console.log(err)
   })
 ```
+
+
+### JavaScript Streaming Example
+
+```javascript
+var HcNetSdk = require('hcnet-sdk')
+var server = new HcNetSdk.Server('https://aurora-testnet.hcnet.org');
+
+var ledgerHandler = function (ledgerResponse) {
+  console.log(ledgerResponse);
+};
+
+var es = server.ledgers()
+  .cursor('now')
+  .stream({
+    onmessage: ledgerHandler
+})
+```
+
 ## Response
 
 This endpoint responds with a list of ledgers.  See [ledger resource](../resources/ledger.md) for reference.

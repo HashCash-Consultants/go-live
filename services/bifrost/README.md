@@ -2,12 +2,12 @@
 
 > In Norse mythology, Bifröst (/ˈbɪvrɒst/ or sometimes Bilröst or Bivrost) is a burning rainbow bridge that reaches between Midgard (Earth) and Asgard, the realm of the gods. [**Wikipedia**](https://en.wikipedia.org/wiki/Bifr%C3%B6st)
 
-Bifrost is highly available and secure Bitcoin/Ethereum → Hcnet bridge. It allows users to move BTC/ETH to Hcnet network and then trade them to other tokens or participate in ICOs (initial coin offering).
+Bifrost is highly available and secure Bitcoin/Ethereum → HcNet bridge. It allows users to move BTC/ETH to HcNet network and then trade them to other tokens or participate in ICOs (initial coin offering).
 
-It solves many problems connected to moving tokens to Hcnet network:
+It solves many problems connected to moving tokens to HcNet network:
 
 * Security:
-  * Developers don’t have access to users’ Hcnet keys.
+  * Developers don’t have access to users’ HcNet keys.
   * No Bitcoin/Ethereum private keys for receiving accounts uploaded to any application machine.
 * High availability:
   * Can be deployed to multiple availability zones (one or more machines can fail).
@@ -23,12 +23,12 @@ Download the binary from [the release page](https://github.com/hcnet/go/releases
 ## How it works
 
 1. User opens the web app implemented using [Bifrost JS SDK](https://github.com/hcnet/bifrost-js-sdk).
-1. User is presented with her public and private Hcnet keys where Bitcoin/Ethereum will be sent.
-1. User selects what cryptocurrency she wants to move to Hcnet network.
+1. User is presented with her public and private HcNet keys where Bitcoin/Ethereum will be sent.
+1. User selects what cryptocurrency she wants to move to HcNet network.
 1. A receiving Bitcoin/Ethereum address is generated.
 1. User sends funds in Bitcoin/Ethereum network.
-1. Bifrost listens to Bitcoin and Ethereum network events. When payment arrives it creates a Hcnet [account](https://www.hcnet.org/developers/guides/concepts/accounts.html) for the user who later adds a temporary signer on the account.
-1. Using a temporary signer Bifrost creates necessary [trust lines](https://www.hcnet.org/developers/guides/concepts/assets.html) and sends corresponding amount of BTC/ETH to user's Hcnet account. It also exchanges BTC/ETH to the final token at a given rate.
+1. Bifrost listens to Bitcoin and Ethereum network events. When payment arrives it creates a HcNet [account](https://www.hcnet.org/developers/guides/concepts/accounts.html) for the user who later adds a temporary signer on the account.
+1. Using a temporary signer Bifrost creates necessary [trust lines](https://www.hcnet.org/developers/guides/concepts/assets.html) and sends corresponding amount of BTC/ETH to user's HcNet account. It also exchanges BTC/ETH to the final token at a given rate.
 1. Finally a temporary signer is removed.
 
 ## Demo
@@ -69,8 +69,8 @@ https://bifrost.hcnet.org/
   * `distribution_public_key` - public key of the distribution account, it can be the same as issuer but it's recommended to use a separate account, it's also used to fund new accounts (see "Account configuration" section)
   * `signer_secret_key` - distribuions accounts's secret key if only one instance of Bifrost is deployed OR [channel](https://www.hcnet.org/developers/guides/channels.html)'s secret key if more than one instance of Bifrost is deployed, signer is also used as a temporary signer in new accounts (see "Account configuration" section)
   * `aurora` - URL to [aurora](https://github.com/hcnet/go/tree/master/services/aurora) server
-  * `network_passphrase` - Hcnet network passphrase (`Public Global Hcnet Network ; September 2015` for production network, `Test SDF Network ; September 2015` for test network)
-  * `starting_balance` - Hcnet XLM amount issued to created account (41 by default)
+  * `network_passphrase` - HcNet network passphrase (`Public Global HcNet Network ; September 2015` for production network, `Test SDF Network ; September 2015` for test network)
+  * `starting_balance` - HcNet XLM amount issued to created account (41 by default)
   * `lock_unix_timestamp` - Unix timestamp (in seconds) of a date until funds will be locked in a new account (helpful if you want to disallow trading during token sale)
 * `database`
   * `type` - currently the only supported database type is: `postgres`
@@ -106,14 +106,14 @@ Sometimes you want to have a limited supply of your token so you create a distri
 
 If you expect really high load you should deploy multiple Bifrost servers. To prevent Bifrost instances from consuming the same sequence numbers of the Distribution account you should use [channels](https://www.hcnet.org/developers/guides/channels.html). Each Bifrost server will contain a secret key of one of the signers of Distribution account and will use Signer account as a [transaction source](https://www.hcnet.org/developers/guides/concepts/transactions.html#source-account) when creating new accounts.
 
-In this configuration all servers have the same `hcnet.issuer_public_key` and `hcnet.distribution_public_key` values but each server has a separate `hcnet.signer_secret_key` which is a signer of `hcnet.distribution_public_key` account (and needs to exist in Hcnet ledger).
+In this configuration all servers have the same `hcnet.issuer_public_key` and `hcnet.distribution_public_key` values but each server has a separate `hcnet.signer_secret_key` which is a signer of `hcnet.distribution_public_key` account (and needs to exist in HcNet ledger).
 
 ![Accounts](./images/accounts.png)
 
 ## Going to production
 
 * Remember that everyone with master public key and **any** child private key can recover your **master** private key. Do not share your master public key and obviously any private keys. Treat your master public key as if it was a private key. Read more in BIP-0032 [Security](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#security) section.
-* Make sure "Sell [your token] for BTC" and/or "Sell [your token] for ETH" exist in Hcnet production network. If not, you can create an offer by sending a transaction with `manage_offer` operation.
+* Make sure "Sell [your token] for BTC" and/or "Sell [your token] for ETH" exist in HcNet production network. If not, you can create an offer by sending a transaction with `manage_offer` operation.
 * Make sure you don't use account from `hcnet.issuer_secret_key` anywhere else than bifrost. Otherwise, sequence numbers will go out of sync and bifrost will stop working. It's good idea to create a new signer on issuing account.
 * Check if public master key is correct. Use CLI tool (`bifrost check-keys`) to generate a few addresses and ensure you have corresponding private keys! You should probably send test transactions to some of these addresses and check if you can withdraw funds.
 * Make sure `using_proxy` variable is set to correct value. Otherwise you will see your proxy IP instead of users' IPs in logs.
@@ -149,4 +149,4 @@ You need to submit a special transaction that "unlocks" the account by removing 
 
 #### I don't see answer to my question. What do I do?
 
-Check [Hcnet Stack Exchange](https://hcnet.stackexchange.com/questions/tagged/bifrost/) to find similar questions or add the new question with the `bifrost` tag.
+Check [HcNet Stack Exchange](https://hcnet.stackexchange.com/questions/tagged/bifrost/) to find similar questions or add the new question with the `bifrost` tag.

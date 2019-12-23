@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"github.com/hcnet/go/clients/federation"
-	"github.com/hcnet/go/clients/aurora"
+	hc "github.com/hcnet/go/clients/auroraclient"
 	"github.com/hcnet/go/clients/hcnettoml"
 	"github.com/hcnet/go/services/bridge/internal/config"
 	"github.com/hcnet/go/services/bridge/internal/db"
@@ -15,19 +15,10 @@ import (
 type RequestHandler struct {
 	Config               *config.Config                          `inject:""`
 	Client               http.SimpleHTTPClientInterface          `inject:""`
-	Aurora              aurora.ClientInterface                 `inject:""`
+	Aurora              hc.ClientInterface                      `inject:""`
 	Database             db.Database                             `inject:""`
-	HcnetTomlResolver  hcnettoml.ClientInterface             `inject:""`
+	HcNetTomlResolver  hcnettoml.ClientInterface             `inject:""`
 	FederationResolver   federation.ClientInterface              `inject:""`
 	TransactionSubmitter submitter.TransactionSubmitterInterface `inject:""`
 	PaymentListener      *listener.PaymentListener               `inject:""`
-}
-
-func (rh *RequestHandler) isAssetAllowed(code string, issuer string) bool {
-	for _, asset := range rh.Config.Assets {
-		if asset.Code == code && asset.Issuer == issuer {
-			return true
-		}
-	}
-	return false
 }

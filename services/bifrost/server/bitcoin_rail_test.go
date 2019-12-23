@@ -83,7 +83,7 @@ func (suite *BitcoinRailTestSuite) TestAssociationAlreadyProcessed() {
 		Chain:            database.ChainBitcoin,
 		AddressIndex:     1,
 		Address:          "1Q74qRud8bXUn6FMtXWZwJa5pj56s3mdyf",
-		HcnetPublicKey: "GDULKYRRVOMASFMXBYD4BYFRSHAKQDREEVVP2TMH2CER3DW2KATIOASB",
+		HcNetPublicKey: "GDULKYRRVOMASFMXBYD4BYFRSHAKQDREEVVP2TMH2CER3DW2KATIOASB",
 		CreatedAt:        time.Now(),
 	}
 	suite.MockDatabase.
@@ -108,7 +108,7 @@ func (suite *BitcoinRailTestSuite) TestAssociationSuccess() {
 		Chain:            database.ChainBitcoin,
 		AddressIndex:     1,
 		Address:          "1Q74qRud8bXUn6FMtXWZwJa5pj56s3mdyf",
-		HcnetPublicKey: "GDULKYRRVOMASFMXBYD4BYFRSHAKQDREEVVP2TMH2CER3DW2KATIOASB",
+		HcNetPublicKey: "GDULKYRRVOMASFMXBYD4BYFRSHAKQDREEVVP2TMH2CER3DW2KATIOASB",
 		CreatedAt:        time.Now(),
 	}
 	suite.MockDatabase.
@@ -126,7 +126,7 @@ func (suite *BitcoinRailTestSuite) TestAssociationSuccess() {
 			suite.Assert().Equal("BTC", string(queue.AssetCodeBTC))
 			suite.Assert().Equal(queue.AssetCodeBTC, queueTransaction.AssetCode)
 			suite.Assert().Equal("1.0000000", queueTransaction.Amount)
-			suite.Assert().Equal(association.HcnetPublicKey, queueTransaction.HcnetPublicKey)
+			suite.Assert().Equal(association.HcNetPublicKey, queueTransaction.HcNetPublicKey)
 		})
 	suite.MockSSEServer.
 		On("BroadcastEvent", transaction.To, sse.TransactionReceivedAddressEvent, []byte(nil))

@@ -5,10 +5,10 @@ import (
 	"net/http"
 
 	log "github.com/sirupsen/logrus"
-	b "github.com/hcnet/go/build"
-	"github.com/hcnet/go/clients/aurora"
+	hc "github.com/hcnet/go/clients/auroraclient"
 	"github.com/hcnet/go/services/internal/bridge-compliance-shared/http/helpers"
 	"github.com/hcnet/go/services/internal/bridge-compliance-shared/protocols/bridge"
+	"github.com/hcnet/go/txnbuild"
 )
 
 // Authorize implements /authorize endpoint
@@ -21,7 +21,7 @@ func (rh *RequestHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = helpers.Validate(request)
+	err = helpers.Validate(request, rh.Config.Assets, rh.Config.Accounts.IssuingAccountID)
 	if err != nil {
 		switch err := err.(type) {
 		case *helpers.ErrorResponse:
@@ -33,23 +33,31 @@ func (rh *RequestHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	operationMutator := b.AllowTrust(
-		b.Trustor{request.AccountID},
-		b.Authorize{true},
-		b.AllowTrustAsset{request.AssetCode},
-	)
+	var sourceAccount *string
+	if rh.Config.Accounts.IssuingAccountID != "" {
+		sourceAccount = &rh.Config.Accounts.IssuingAccountID
+	}
+
+	allowTrustOp := bridge.AllowTrustOperationBody{
+		Source:    sourceAccount,
+		Authorize: true,
+		Trustor:   request.AccountID,
+		AssetCode: request.AssetCode,
+	}
+
+	operationBuilder := allowTrustOp.Build()
 
 	submitResponse, err := rh.TransactionSubmitter.SubmitTransaction(
 		nil,
 		rh.Config.Accounts.AuthorizingSeed,
-		operationMutator,
+		[]txnbuild.Operation{operationBuilder},
 		nil,
 	)
 
 	jsonEncoder := json.NewEncoder(w)
 
 	if err != nil {
-		herr, isAuroraError := err.(*aurora.Error)
+		herr, isAuroraError := err.(*hc.Error)
 		if !isAuroraError {
 			log.WithFields(log.Fields{"err": err}).Error("Error submitting transaction")
 			helpers.Write(w, helpers.InternalServerError)

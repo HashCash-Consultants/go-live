@@ -25,7 +25,7 @@ type Server struct {
 	Database                   database.Database            `inject:""`
 	EthereumListener           *ethereum.Listener           `inject:""`
 	EthereumAddressGenerator   *ethereum.AddressGenerator   `inject:""`
-	HcnetAccountConfigurator *hcnet.AccountConfigurator `inject:""`
+	HcNetAccountConfigurator *hcnet.AccountConfigurator `inject:""`
 	TransactionsQueue          queue.Queue                  `inject:""`
 	SSEServer                  sse.ServerInterface          `inject:""`
 

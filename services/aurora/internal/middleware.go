@@ -8,22 +8,24 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-	chimiddleware "github.com/go-chi/chi/middleware"
 	"github.com/hcnet/go/services/aurora/internal/errors"
 	"github.com/hcnet/go/services/aurora/internal/hchi"
 	"github.com/hcnet/go/services/aurora/internal/httpx"
 	"github.com/hcnet/go/services/aurora/internal/render"
+	hProblem "github.com/hcnet/go/services/aurora/internal/render/problem"
 	"github.com/hcnet/go/support/log"
 	"github.com/hcnet/go/support/render/problem"
 )
 
-// middleware adds the "app" context into every request, so that subsequence middleware
+// appContextMiddleware adds the "app" context into every request, so that subsequence appContextMiddleware
 // or handlers can retrieve a aurora.App instance
-func (app *App) middleware(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := app.Context(r.Context())
-		h.ServeHTTP(w, r.WithContext(ctx))
-	})
+func appContextMiddleware(app *App) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := withAppContext(r.Context(), app)
+			h.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 // requestCacheHeadersMiddleware adds caching headers to each response.
@@ -51,6 +53,8 @@ func contextMiddleware(next http.Handler) http.Handler {
 const (
 	clientNameHeader    = "X-Client-Name"
 	clientVersionHeader = "X-Client-Version"
+	appNameHeader       = "X-App-Name"
+	appVersionHeader    = "X-App-Version"
 )
 
 // loggerMiddleware logs http requests and resposnes to the logging subsytem of aurora.
@@ -59,7 +63,7 @@ func loggerMiddleware(h http.Handler) http.Handler {
 		ctx := r.Context()
 		mw := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
-		logger := log.WithField("req", chimiddleware.GetReqID(ctx))
+		logger := log.WithField("req", middleware.GetReqID(ctx))
 		ctx = log.Set(ctx, logger)
 
 		// Checking `Accept` header from user request because if the streaming connection
@@ -72,7 +76,7 @@ func loggerMiddleware(h http.Handler) http.Handler {
 
 		h.ServeHTTP(mw, r.WithContext(ctx))
 
-		duration := time.Now().Sub(then)
+		duration := time.Since(then)
 		logEndOfRequest(ctx, r, duration, mw, streaming)
 	})
 }
@@ -97,6 +101,8 @@ func logStartOfRequest(ctx context.Context, r *http.Request, streaming bool) {
 	log.Ctx(ctx).WithFields(log.F{
 		"client_name":    getClientData(r, clientNameHeader),
 		"client_version": getClientData(r, clientVersionHeader),
+		"app_name":       getClientData(r, appNameHeader),
+		"app_version":    getClientData(r, appVersionHeader),
 		"forwarded_ip":   firstXForwardedFor(r),
 		"host":           r.Host,
 		"ip":             remoteAddrIP(r),
@@ -119,6 +125,8 @@ func logEndOfRequest(ctx context.Context, r *http.Request, duration time.Duratio
 		"bytes":          mw.BytesWritten(),
 		"client_name":    getClientData(r, clientNameHeader),
 		"client_version": getClientData(r, clientVersionHeader),
+		"app_name":       getClientData(r, appNameHeader),
+		"app_version":    getClientData(r, appVersionHeader),
 		"duration":       duration.Seconds(),
 		"forwarded_ip":   firstXForwardedFor(r),
 		"host":           r.Host,
@@ -132,11 +140,15 @@ func logEndOfRequest(ctx context.Context, r *http.Request, duration time.Duratio
 	}).Info("Finished request")
 }
 
-func (web *Web) RateLimitMiddleware(next http.Handler) http.Handler {
-	if web.rateLimiter == nil {
+func firstXForwardedFor(r *http.Request) string {
+	return strings.TrimSpace(strings.SplitN(r.Header.Get("X-Forwarded-For"), ",", 2)[0])
+}
+
+func (w *web) RateLimitMiddleware(next http.Handler) http.Handler {
+	if w.rateLimiter == nil {
 		return next
 	}
-	return web.rateLimiter.RateLimit(next)
+	return w.rateLimiter.RateLimit(next)
 }
 
 // recoverMiddleware helps the server recover from panics. It ensures that
@@ -174,5 +186,46 @@ func requestMetricsMiddleware(h http.Handler) http.Handler {
 			// a success is in [400, 600)
 			app.web.failureMeter.Mark(1)
 		}
+	})
+}
+
+// acceptOnlyJSON inspects the accept header of the request and responds with
+// an error if the content type is not JSON
+func acceptOnlyJSON(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType := render.Negotiate(r)
+		if contentType != render.MimeHal && contentType != render.MimeJSON {
+			problem.Render(r.Context(), w, hProblem.NotAcceptable)
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
+// requiresExperimentalIngestion is a middleware which enables a handler
+// if the experimental ingestion system is enabled and initialized
+func requiresExperimentalIngestion(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		app := AppFromContext(ctx)
+		if !app.config.EnableExperimentalIngestion {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		lastIngestedLedger, err := app.HistoryQ().GetLastLedgerExpIngestNonBlocking()
+		if err != nil {
+			problem.Render(r.Context(), w, err)
+			return
+		}
+
+		// expingest has not finished processing any ledger so no data.
+		if lastIngestedLedger == 0 {
+			problem.Render(r.Context(), w, hProblem.StillIngesting)
+			return
+		}
+
+		h.ServeHTTP(w, r)
 	})
 }

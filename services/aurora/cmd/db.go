@@ -12,8 +12,19 @@ import (
 	"github.com/spf13/viper"
 	"github.com/hcnet/go/services/aurora/internal/db2/schema"
 	"github.com/hcnet/go/services/aurora/internal/ingest"
+	"github.com/hcnet/go/services/aurora/internal/util"
 	"github.com/hcnet/go/support/db"
+	"github.com/hcnet/go/support/errors"
 	hlog "github.com/hcnet/go/support/log"
+)
+
+type reingestType int
+
+const (
+	byAll reingestType = iota
+	byRange
+	bySeq
+	byOutdated
 )
 
 var dbCmd = &cobra.Command{
@@ -59,7 +70,7 @@ var dbInitAssetStatsCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		cdb, err := db.Open("postgres", config.HcnetCoreDatabaseURL)
+		cdb, err := db.Open("postgres", config.HcNetCoreDatabaseURL)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -76,14 +87,14 @@ var dbInitAssetStatsCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		log.Println(fmt.Sprintf("Updating %d assets...", count))
+		log.Printf("Updating %d assets...\n", count)
 
 		err = assetStats.UpdateAssetStats()
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		log.Println(fmt.Sprintf("Added stats for %d assets...", count))
+		log.Printf("Added stats for %d assets...\n", count)
 	},
 }
 
@@ -91,7 +102,6 @@ var dbClearCmd = &cobra.Command{
 	Use:   "clear",
 	Short: "clears all imported historical data",
 	Run: func(cmd *cobra.Command, args []string) {
-		hlog.DefaultLogger.Logger.Level = config.LogLevel
 		initConfig()
 
 		err := ingestSystem(ingest.Config{
@@ -151,9 +161,15 @@ var dbMigrateCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		_, err = schema.Migrate(db, dir, count)
+		numMigrationsRun, err := schema.Migrate(db, dir, count)
 		if err != nil {
 			log.Fatal(err)
+		}
+
+		if numMigrationsRun == 0 {
+			log.Println("No migrations applied.")
+		} else {
+			log.Printf("Successfully applied %d migrations.\n", numMigrationsRun)
 		}
 	},
 }
@@ -175,7 +191,6 @@ var dbRebaseCmd = &cobra.Command{
 	Short: "rebases clears the aurora db and ingests the latest ledger segment from hcnet-core",
 	Long:  "...",
 	Run: func(cmd *cobra.Command, args []string) {
-		hlog.DefaultLogger.Logger.Level = config.LogLevel
 		initConfig()
 
 		i := ingestSystem(ingest.Config{
@@ -191,52 +206,62 @@ var dbRebaseCmd = &cobra.Command{
 }
 
 var dbReingestCmd = &cobra.Command{
-	Use:   "reingest",
-	Short: "imports all data",
-	Long:  "reingest runs the ingestion pipeline over every ledger",
+	Use:   "reingest [Ledger sequence numbers (leave it empty for reingesting from the very beginning)]",
+	Short: "reingest all ledgers or ledgers specified by individual sequence numbers",
+	Long:  "reingest runs the ingestion pipeline over every ledger or ledgers specified by individual sequence numbers",
 	Run: func(cmd *cobra.Command, args []string) {
-		hlog.DefaultLogger.Logger.Level = config.LogLevel
-		initConfig()
-
-		i := ingestSystem(ingest.Config{
-			IngestFailedTransactions: config.IngestFailedTransactions,
-		})
-		i.SkipCursorUpdate = true
-		logStatus := func(stage string) {
-			count := i.Metrics.IngestLedgerTimer.Count()
-			rate := i.Metrics.IngestLedgerTimer.RateMean()
-			loadMean := time.Duration(i.Metrics.LoadLedgerTimer.Mean())
-			ingestMean := time.Duration(i.Metrics.IngestLedgerTimer.Mean())
-			clearMean := time.Duration(i.Metrics.IngestLedgerTimer.Mean())
-			hlog.WithField("count", count).
-				WithField("rate", rate).
-				WithField("means", fmt.Sprintf("load: %s clear: %s ingest: %s", loadMean, clearMean, ingestMean)).
-				Infof("reingest: %s", stage)
-		}
-
-		done := make(chan error, 1)
-
-		// run ingestion in separate goroutine
-		go func() {
-			_, err := reingest(i, args)
-			done <- err
-			logStatus("complete")
-		}()
-
-		// output metrics
-		metrics := time.Tick(2 * time.Second)
-		for {
-			select {
-			case <-metrics:
-				logStatus("status")
-
-			case err := <-done:
+		if len(args) == 0 {
+			reingest(byAll)
+		} else {
+			argsInt32 := make([]int32, 0, len(args))
+			for _, arg := range args {
+				seq, err := strconv.Atoi(arg)
 				if err != nil {
-					log.Fatal(err)
+					cmd.Usage()
+					log.Fatalf(`Invalid sequence number "%s"`, arg)
 				}
-				os.Exit(0)
+				argsInt32 = append(argsInt32, int32(seq))
 			}
+
+			reingest(bySeq, argsInt32...)
 		}
+	},
+}
+
+var dbReingestRangeCmd = &cobra.Command{
+	Use:   "range [Start sequence number] [End sequence number]",
+	Short: "reingests ledgers within a range",
+	Long:  "reingests ledgers between X and Y sequence number (closed intervals)",
+	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) != 2 {
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		argsInt32 := make([]int32, 0, len(args))
+		for _, arg := range args {
+			seq, err := strconv.Atoi(arg)
+			if err != nil {
+				cmd.Usage()
+				log.Fatalf(`Invalid sequence number "%s"`, arg)
+			}
+			argsInt32 = append(argsInt32, int32(seq))
+		}
+
+		reingest(byRange, argsInt32...)
+	},
+}
+
+var dbReingestOutdatedCmd = &cobra.Command{
+	Use:   "outdated",
+	Short: "reingests all outdated ledgers",
+	Long:  "reingests ledgers whose version is less than the current version up to a million ledgers",
+	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) > 0 {
+			log.Println("ignoring args...")
+		}
+
+		reingest(byOutdated)
 	},
 }
 
@@ -252,6 +277,7 @@ func init() {
 		dbReingestCmd,
 		dbRebaseCmd,
 	)
+	dbReingestCmd.AddCommand(dbReingestRangeCmd, dbReingestOutdatedCmd)
 }
 
 func ingestSystem(ingestConfig ingest.Config) *ingest.System {
@@ -260,7 +286,7 @@ func ingestSystem(ingestConfig ingest.Config) *ingest.System {
 		log.Fatal(err)
 	}
 
-	cdb, err := db.Open("postgres", config.HcnetCoreDatabaseURL)
+	cdb, err := db.Open("postgres", config.HcNetCoreDatabaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -270,42 +296,145 @@ func ingestSystem(ingestConfig ingest.Config) *ingest.System {
 		log.Fatal("network-passphrase is blank: reingestion requires manually setting passphrase")
 	}
 
-	return ingest.New(passphrase, config.HcnetCoreURL, cdb, hdb, ingestConfig)
+	return ingest.New(passphrase, config.HcNetCoreURL, cdb, hdb, ingestConfig)
 }
 
-func reingest(i *ingest.System, args []string) (int, error) {
-	if len(args) == 0 {
-		return i.ReingestAll()
+func reingest(cmd reingestType, args ...int32) {
+	initConfig()
+
+	i := ingestSystem(ingest.Config{
+		IngestFailedTransactions: config.IngestFailedTransactions,
+	})
+	i.SkipCursorUpdate = true
+
+	logStatus := func(stage string) {
+		count := i.Metrics.IngestLedgerTimer.Count()
+		rate := i.Metrics.IngestLedgerTimer.RateMean()
+		loadMean := time.Duration(i.Metrics.LoadLedgerTimer.Mean())
+		ingestMean := time.Duration(i.Metrics.IngestLedgerTimer.Mean())
+		clearMean := time.Duration(i.Metrics.ClearLedgerTimer.Mean())
+		hlog.WithField("count", count).
+			WithField("rate", rate).
+			WithField("means", fmt.Sprintf("load: %s clear: %s ingest: %s", loadMean, clearMean, ingestMean)).
+			Infof("reingest: %s", stage)
 	}
 
-	if len(args) == 1 && args[0] == "outdated" {
-		return i.ReingestOutdated()
+	done := make(chan error, 1)
+
+	// run ingestion in separate goroutine
+	go func() {
+		var err error
+		switch cmd {
+		case byAll:
+			_, err = i.ReingestAll()
+
+		case bySeq:
+			for _, seq := range args {
+				err = i.ReingestSingle(seq)
+				if err != nil {
+					break
+				}
+			}
+
+		case byRange:
+			// should already be checked by the caller
+			if len(args) != 2 {
+				log.Fatal(`"aurora db reingest range" command requires 2 sequence numbers after "range"`)
+			}
+
+			err = reingestRange(i, args[0], args[1])
+
+		case byOutdated:
+			_, err = i.ReingestOutdated()
+		}
+
+		done <- err
+		logStatus("complete")
+	}()
+
+	// output metrics
+	metrics := time.Tick(2 * time.Second)
+	for {
+		select {
+		case <-metrics:
+			logStatus("status")
+
+		case err := <-done:
+			if err != nil {
+				log.Fatal(err)
+			}
+			os.Exit(0)
+		}
+	}
+}
+
+type ledgerRange struct {
+	from, to int32
+}
+
+func reingestRange(i *ingest.System, from, to int32) error {
+	if to < from {
+		return errors.New("Invalid range")
 	}
 
-	if len(args) >= 1 && args[0] == "range" {
-		from, err := strconv.Atoi(args[1])
-		if err != nil {
-			return 0, err
-		}
+	var (
+		size    int32 = 10000
+		workers int   = 10
+	)
 
-		to, err := strconv.Atoi(args[2])
-		if err != nil {
-			return 0, err
+	var pool util.WorkersPool
+	hlog.Info("Creating work...")
+	for current := from; current <= to; current += size {
+		lr := ledgerRange{from: current, to: current + size - 1}
+		if lr.to > to {
+			lr.to = to
 		}
-
-		return i.ReingestRange(int32(from), int32(to))
+		pool.AddWork(lr)
 	}
 
-	for idx, arg := range args {
-		seq, err := strconv.Atoi(arg)
-		if err != nil {
-			return idx, err
+	allJobs := pool.WorkSize()
+
+	pool.SetWorker(func(workerID int, job interface{}) {
+		lr, ok := job.(ledgerRange)
+		if !ok {
+			hlog.Error("job is not a ledgerRange")
+			os.Exit(1)
 		}
 
-		err = i.ReingestSingle(int32(seq))
+		localLog := hlog.WithFields(hlog.F{
+			"id":   workerID,
+			"from": lr.from,
+			"to":   lr.to,
+		})
+
+		localLog.Info("Worker starting range...")
+
+		_, err := i.ReingestRange(lr.from, lr.to)
 		if err != nil {
-			return idx, err
+			localLog.WithField("err", err).Error("Worker failed range, work will be processed again")
+			// Add the work again
+			pool.AddWork(lr)
+			return
 		}
-	}
-	return len(args), nil
+		localLog.Info("Worker finished range")
+	})
+
+	hlog.Infof("Starting %d workers...", workers)
+	done := make(chan bool)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case <-done:
+				ticker.Stop()
+				return
+			case <-ticker.C:
+			}
+			hlog.WithField("progress", float32(allJobs-pool.WorkSize())/float32(allJobs)*100).Info("Work status")
+		}
+	}()
+	pool.Start(workers)
+	done <- true
+	hlog.Info("Done")
+	return nil
 }

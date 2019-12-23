@@ -38,8 +38,8 @@ In order to add a new scenario or rebuild existing scenarios you need:
 Here's an example of recipe file with comments:
 ```rb
 # Define two accounts test accounts
-account :scott, Hcnet::KeyPair.from_seed("SBZWG33UOQQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAPSA")
-account :bartek, Hcnet::KeyPair.from_seed("SBRGC4TUMVVSAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCBDHV")
+account :scott, HcNet::KeyPair.from_seed("SBZWG33UOQQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAPSA")
+account :bartek, HcNet::KeyPair.from_seed("SBRGC4TUMVVSAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCBDHV")
 
 # use_manual_close causes scc to run a process with MANUAL_CLOSE=true
 use_manual_close

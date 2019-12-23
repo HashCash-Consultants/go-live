@@ -11,7 +11,7 @@ type Config struct {
 	Ethereum                       *ethereumConfig `valid:"optional" toml:"ethereum"`
 	AccessControlAllowOriginHeader string          `valid:"optional" toml:"access_control_allow_origin_header"`
 
-	Hcnet struct {
+	HcNet struct {
 		Aurora           string `valid:"required" toml:"aurora"`
 		NetworkPassphrase string `valid:"required" toml:"network_passphrase"`
 		// TokenAssetCode is asset code of token that will be purchased using BTC or ETH.
@@ -70,6 +70,6 @@ type ethereumConfig struct {
 }
 
 func (c Config) SignerPublicKey() string {
-	kp := keypair.MustParse(c.Hcnet.SignerSecretKey)
+	kp := keypair.MustParse(c.HcNet.SignerSecretKey)
 	return kp.Address()
 }

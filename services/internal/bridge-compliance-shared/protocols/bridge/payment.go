@@ -16,7 +16,7 @@ var (
 	// input errors
 
 	// PaymentCannotResolveDestination is an error response
-	PaymentCannotResolveDestination = &helpers.ErrorResponse{Code: "cannot_resolve_destination", Message: "Cannot resolve federated Hcnet address.", Status: http.StatusBadRequest}
+	PaymentCannotResolveDestination = &helpers.ErrorResponse{Code: "cannot_resolve_destination", Message: "Cannot resolve federated HcNet address.", Status: http.StatusBadRequest}
 	// PaymentCannotUseMemo is an error response
 	PaymentCannotUseMemo = &helpers.ErrorResponse{Code: "cannot_use_memo", Message: "Memo given in request but federation returned memo fields.", Status: http.StatusBadRequest}
 	// PaymentSourceNotExist is an error response
@@ -201,4 +201,20 @@ func NewPaymentPendingError(seconds int) *helpers.ErrorResponse {
 		Message: PaymentPending.Message,
 		Data:    map[string]interface{}{"pending": seconds},
 	}
+}
+
+// PaymentResponse represents a response from the bridge server when a payment is received.
+type PaymentResponse struct {
+	ID              string
+	Type            string
+	PagingToken     string
+	From            string
+	To              string
+	AssetType       string
+	AssetCode       string
+	AssetIssuer     string
+	Amount          string
+	TransactionHash string
+	MemoType        string
+	Memo            string
 }

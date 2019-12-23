@@ -10,7 +10,7 @@ import (
 )
 
 // onNewEthereumTransaction checks if transaction is valid and adds it to
-// the transactions queue for HcnetAccountConfigurator to consume.
+// the transactions queue for HcNetAccountConfigurator to consume.
 //
 // Transaction added to transactions queue should be in a format described in
 // queue.Transaction (especialy amounts). Pooling service should not have to deal with any
@@ -53,8 +53,8 @@ func (s *Server) onNewEthereumTransaction(transaction ethereum.Transaction) erro
 		TransactionID: transaction.Hash,
 		AssetCode:     queue.AssetCodeETH,
 		// Amount in the base unit of currency.
-		Amount:           transaction.ValueToHcnet(),
-		HcnetPublicKey: addressAssociation.HcnetPublicKey,
+		Amount:           transaction.ValueToHcNet(),
+		HcNetPublicKey: addressAssociation.HcNetPublicKey,
 	}
 
 	err = s.TransactionsQueue.QueueAdd(queueTx)

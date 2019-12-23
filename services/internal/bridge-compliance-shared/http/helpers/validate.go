@@ -10,12 +10,12 @@ import (
 )
 
 func init() {
-	govalidator.CustomTypeTagMap.Set("hcnet_accountid", govalidator.CustomTypeValidator(isHcnetAccountID))
-	govalidator.CustomTypeTagMap.Set("hcnet_seed", govalidator.CustomTypeValidator(isHcnetSeed))
-	govalidator.CustomTypeTagMap.Set("hcnet_asset_code", govalidator.CustomTypeValidator(isHcnetAssetCode))
-	govalidator.CustomTypeTagMap.Set("hcnet_address", govalidator.CustomTypeValidator(isHcnetAddress))
-	govalidator.CustomTypeTagMap.Set("hcnet_amount", govalidator.CustomTypeValidator(isHcnetAmount))
-	govalidator.CustomTypeTagMap.Set("hcnet_destination", govalidator.CustomTypeValidator(isHcnetDestination))
+	govalidator.CustomTypeTagMap.Set("hcnet_accountid", govalidator.CustomTypeValidator(isHcNetAccountID))
+	govalidator.CustomTypeTagMap.Set("hcnet_seed", govalidator.CustomTypeValidator(isHcNetSeed))
+	govalidator.CustomTypeTagMap.Set("hcnet_asset_code", govalidator.CustomTypeValidator(isHcNetAssetCode))
+	govalidator.CustomTypeTagMap.Set("hcnet_address", govalidator.CustomTypeValidator(isHcNetAddress))
+	govalidator.CustomTypeTagMap.Set("hcnet_amount", govalidator.CustomTypeValidator(isHcNetAmount))
+	govalidator.CustomTypeTagMap.Set("hcnet_destination", govalidator.CustomTypeValidator(isHcNetDestination))
 
 }
 
@@ -35,9 +35,9 @@ func Validate(request Request, params ...interface{}) error {
 			case strings.HasSuffix(errorValue, "does not validate as hcnet_asset_code"):
 				return NewInvalidParameterError(field, "Asset code must be 1-12 alphanumeric characters.")
 			case strings.HasSuffix(errorValue, "does not validate as hcnet_address"):
-				return NewInvalidParameterError(field, "Hcnet address must be of form user*domain.com")
+				return NewInvalidParameterError(field, "HcNet address must be of form user*domain.com")
 			case strings.HasSuffix(errorValue, "does not validate as hcnet_destination"):
-				return NewInvalidParameterError(field, "Hcnet destination must be of form user*domain.com or start with `G` and contain 56 alphanum characters.")
+				return NewInvalidParameterError(field, "HcNet destination must be of form user*domain.com or start with `G` and contain 56 alphanum characters.")
 			case strings.HasSuffix(errorValue, "does not validate as hcnet_amount"):
 				return NewInvalidParameterError(field, "Amount must be positive and have up to 7 decimal places.")
 			default:
@@ -50,7 +50,7 @@ func Validate(request Request, params ...interface{}) error {
 }
 
 // These are copied from support/config. Should we move them to /strkey maybe?
-func isHcnetAccountID(i interface{}, context interface{}) bool {
+func isHcNetAccountID(i interface{}, context interface{}) bool {
 	enc, ok := i.(string)
 
 	if !ok {
@@ -58,15 +58,10 @@ func isHcnetAccountID(i interface{}, context interface{}) bool {
 	}
 
 	_, err := strkey.Decode(strkey.VersionByteAccountID, enc)
-
-	if err == nil {
-		return true
-	}
-
-	return false
+	return err == nil
 }
 
-func isHcnetSeed(i interface{}, context interface{}) bool {
+func isHcNetSeed(i interface{}, context interface{}) bool {
 	enc, ok := i.(string)
 
 	if !ok {
@@ -74,15 +69,10 @@ func isHcnetSeed(i interface{}, context interface{}) bool {
 	}
 
 	_, err := strkey.Decode(strkey.VersionByteSeed, enc)
-
-	if err == nil {
-		return true
-	}
-
-	return false
+	return err == nil
 }
 
-func isHcnetAssetCode(i interface{}, context interface{}) bool {
+func isHcNetAssetCode(i interface{}, context interface{}) bool {
 	code, ok := i.(string)
 
 	if !ok {
@@ -100,7 +90,7 @@ func isHcnetAssetCode(i interface{}, context interface{}) bool {
 	return true
 }
 
-func isHcnetAddress(i interface{}, context interface{}) bool {
+func isHcNetAddress(i interface{}, context interface{}) bool {
 	addr, ok := i.(string)
 
 	if !ok {
@@ -108,14 +98,10 @@ func isHcnetAddress(i interface{}, context interface{}) bool {
 	}
 
 	_, _, err := address.Split(addr)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }
 
-func isHcnetAmount(i interface{}, context interface{}) bool {
+func isHcNetAmount(i interface{}, context interface{}) bool {
 	am, ok := i.(string)
 
 	if !ok {
@@ -123,15 +109,11 @@ func isHcnetAmount(i interface{}, context interface{}) bool {
 	}
 
 	_, err := amount.Parse(am)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }
 
-// isHcnetDestination checks if `i` is either account public key or Hcnet address.
-func isHcnetDestination(i interface{}, context interface{}) bool {
+// isHcNetDestination checks if `i` is either account public key or HcNet address.
+func isHcNetDestination(i interface{}, context interface{}) bool {
 	dest, ok := i.(string)
 
 	if !ok {

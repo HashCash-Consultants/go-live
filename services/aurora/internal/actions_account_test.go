@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/hcnet/go/protocols/aurora"
+	"github.com/hcnet/go/services/aurora/internal/db2/history"
+	"github.com/hcnet/go/services/aurora/internal/render/problem"
 )
 
 func TestAccountActions_Show(t *testing.T) {
@@ -25,6 +27,7 @@ func TestAccountActions_Show(t *testing.T) {
 		for _, balance := range result.Balances {
 			if balance.Type == "native" {
 				ht.Assert.Equal(uint32(0), balance.LastModifiedLedger)
+				ht.Assert.Nil(balance.IsAuthorized)
 			} else {
 				ht.Assert.NotEqual(uint32(0), balance.LastModifiedLedger)
 			}
@@ -34,6 +37,18 @@ func TestAccountActions_Show(t *testing.T) {
 	// missing account
 	w = ht.Get("/accounts/GDBAPLDCAEJV6LSEDFEAUDAVFYSNFRUYZ4X75YYJJMMX5KFVUOHX46SQ")
 	ht.Assert.Equal(404, w.Code)
+}
+
+func TestAccountActionsStillIngesting_Show(t *testing.T) {
+	ht := StartHTTPTest(t, "base")
+	ht.App.config.EnableExperimentalIngestion = true
+
+	defer ht.Finish()
+	q := &history.Q{ht.AuroraSession()}
+	ht.Assert.NoError(q.UpdateLastLedgerExpIngest(0))
+
+	w := ht.Get("/accounts?signer=GDBAPLDCAEJV6LSEDFEAUDAVFYSNFRUYZ4X75YYJJMMX5KFVUOHX46SQ")
+	ht.Assert.Equal(problem.StillIngesting.Status, w.Code)
 }
 
 func TestAccountActions_ShowRegressions(t *testing.T) {

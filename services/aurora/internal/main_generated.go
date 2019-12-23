@@ -4,12 +4,6 @@ import (
 	"net/http"
 )
 
-func (action AccountShowAction) Handle(w http.ResponseWriter, r *http.Request) {
-	ap := &action.Action
-	ap.Prepare(w, r)
-	ap.Execute(&action)
-}
-
 func (action AssetsAction) Handle(w http.ResponseWriter, r *http.Request) {
 	ap := &action.Action
 	ap.Prepare(w, r)
@@ -23,6 +17,12 @@ func (action DataShowAction) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (action EffectIndexAction) Handle(w http.ResponseWriter, r *http.Request) {
+	ap := &action.Action
+	ap.Prepare(w, r)
+	ap.Execute(&action)
+}
+
+func (action FixedPathIndexAction) Handle(w http.ResponseWriter, r *http.Request) {
 	ap := &action.Action
 	ap.Prepare(w, r)
 	ap.Execute(&action)
@@ -94,12 +94,6 @@ func (action PathIndexAction) Handle(w http.ResponseWriter, r *http.Request) {
 	ap.Execute(&action)
 }
 
-func (action PaymentsIndexAction) Handle(w http.ResponseWriter, r *http.Request) {
-	ap := &action.Action
-	ap.Prepare(w, r)
-	ap.Execute(&action)
-}
-
 func (action RateLimitExceededAction) Handle(w http.ResponseWriter, r *http.Request) {
 	ap := &action.Action
 	ap.Prepare(w, r)
@@ -125,18 +119,6 @@ func (action TradeIndexAction) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (action TransactionCreateAction) Handle(w http.ResponseWriter, r *http.Request) {
-	ap := &action.Action
-	ap.Prepare(w, r)
-	ap.Execute(&action)
-}
-
-func (action TransactionIndexAction) Handle(w http.ResponseWriter, r *http.Request) {
-	ap := &action.Action
-	ap.Prepare(w, r)
-	ap.Execute(&action)
-}
-
-func (action TransactionShowAction) Handle(w http.ResponseWriter, r *http.Request) {
 	ap := &action.Action
 	ap.Prepare(w, r)
 	ap.Execute(&action)

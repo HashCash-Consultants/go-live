@@ -2,11 +2,11 @@
 title: Transaction
 ---
 
-**Transactions** are the basic unit of change in the Hcnet Network.
+**Transactions** are the basic unit of change in the HcNet Network.
 
 A transaction is a grouping of [operations](./operation.md).
 
-To learn more about the concept of transactions in the Hcnet network, take a look at the [Hcnet transactions concept guide](https://www.hcnet.org/developers/learn/concepts/transactions.html).
+To learn more about the concept of transactions in the HcNet network, take a look at the [HcNet transactions concept guide](https://www.hcnet.org/developers/learn/concepts/transactions.html).
 
 ## Attributes
 
@@ -23,7 +23,7 @@ To learn more about the concept of transactions in the Hcnet network, take a loo
 | fee_paid         | number | The fee paid by the source account of this transaction when the transaction was applied to the ledger.                         |
 | operation_count  | number | The number of operations that are contained within this transaction.                                                           |
 | envelope_xdr     | string | A base64 encoded string of the raw `TransactionEnvelope` xdr struct for this transaction                                       |
-| result_xdr       | string | A base64 encoded string of the raw `TransactionResultPair` xdr struct for this transaction                                     |
+| result_xdr       | string | A base64 encoded string of the raw `TransactionResult` xdr struct for this transaction                                     |
 | result_meta_xdr  | string | A base64 encoded string of the raw `TransactionMeta` xdr struct for this transaction                                           |
 | fee_meta_xdr     | string | A base64 encoded string of the raw `LedgerEntryChanges` xdr struct produced by taking fees for this transaction.                                           |
 | memo_type        | string | |
@@ -108,4 +108,4 @@ To learn more about the concept of transactions in the Hcnet network, take a loo
 
 
 ## Submitting transactions
-To submit a new transaction to Hcnet network, it must first be built and signed locally. Then you can submit a hex representation of your transaction’s [XDR](../../learn/xdr.md) to the `/transactions` endpoint. Read more about submitting transactions in [Post Transaction](../transactions-create.md) doc.
+To submit a new transaction to HcNet network, it must first be built and signed locally. Then you can submit a hex representation of your transaction’s [XDR](../../learn/xdr.md) to the `/transactions` endpoint. Read more about submitting transactions in [Post Transaction](../transactions-create.md) doc.

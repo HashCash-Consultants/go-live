@@ -18,7 +18,7 @@ type RequestHandler struct {
 	Client                  http.SimpleHTTPClientInterface `inject:""`
 	Database                db.Database                    `inject:""`
 	SignatureSignerVerifier crypto.SignerVerifierInterface `inject:""`
-	HcnetTomlResolver     hcnettoml.ClientInterface    `inject:""`
+	HcNetTomlResolver     hcnettoml.ClientInterface    `inject:""`
 	FederationResolver      federation.ClientInterface     `inject:""`
 	NonceGenerator          NonceGeneratorInterface        `inject:""`
 }

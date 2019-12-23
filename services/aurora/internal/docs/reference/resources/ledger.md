@@ -4,7 +4,7 @@ title: Ledger
 
 A **ledger** resource contains information about a given ledger.
 
-To learn more about the concept of ledgers in the Hcnet network, take a look at the [Hcnet ledger concept guide](https://www.hcnet.org/developers/learn/concepts/ledger.html).
+To learn more about the concept of ledgers in the HcNet network, take a look at the [HcNet ledger concept guide](https://www.hcnet.org/developers/learn/concepts/ledger.html).
 
 ## Attributes
 

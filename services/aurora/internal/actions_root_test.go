@@ -25,9 +25,9 @@ func TestRootAction(t *testing.T) {
 	defer server.Close()
 
 	ht.App.auroraVersion = "test-aurora"
-	ht.App.config.HcnetCoreURL = server.URL
+	ht.App.config.HcNetCoreURL = server.URL
 	ht.App.config.NetworkPassphrase = "test"
-	ht.App.UpdateHcnetCoreInfo()
+	ht.App.UpdateHcNetCoreInfo()
 
 	w := ht.Get("/")
 
@@ -36,7 +36,7 @@ func TestRootAction(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &actual)
 		ht.Require.NoError(err)
 		ht.Assert.Equal("test-aurora", actual.AuroraVersion)
-		ht.Assert.Equal("test-core", actual.HcnetCoreVersion)
+		ht.Assert.Equal("test-core", actual.HcNetCoreVersion)
 		ht.Assert.Equal(int32(4), actual.CoreSupportedProtocolVersion)
 		ht.Assert.Equal(int32(3), actual.CurrentProtocolVersion)
 	}

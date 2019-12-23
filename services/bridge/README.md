@@ -1,13 +1,13 @@
 # bridge-server
-This is a stand alone server written in go. It is designed to make connecting to the Hcnet network as easy as possible. 
+This is a stand alone server written in go. It is designed to make connecting to the HcNet network as easy as possible. 
 It allows you to be notified when a payment is received by a particular account. It also allows you to send a payment via a HTTP request.
 It can optionally be connected to a `compliance` server if you want to carry out the compliance protocol.
 It can be used by any project that needs to accept or send payments such as anchors or merchants accepting payments.
 
 Handles:
 
-- Creating Hcnet transactions.
-- Monitoring a receiving Hcnet account.
+- Creating HcNet transactions.
+- Monitoring a receiving HcNet account.
 
 
 ## Downloading the server
@@ -29,7 +29,7 @@ The `bridge.cfg` file must be present in a working directory (you can load anoth
 * `api_key` - when set, all requests to bridge server must contain `api_key` parameter with a correct value, otherwise the server will respond with `503 Forbidden`
 * `network_passphrase` - passphrase of the network that will be used with this bridge server:
    * test network: `Test SDF Network ; September 2015`
-   * public network: `Public Global Hcnet Network ; September 2015`
+   * public network: `Public Global HcNet Network ; September 2015`
 * `compliance` - URL to compliance server instance if you want to carry out the compliance protocol
 * `aurora` - URL to [aurora](https://github.com/hcnet/aurora) server instance
 * `assets` - array of approved assets codes that this server can authorize or receive. These are currency code/issuer pairs. Use asset code 'XLM' with no issuer to listen for XLM payments. See [`bridge_example.cfg`](./bridge_example.cfg) for example.
@@ -289,7 +289,7 @@ name |  | description
 `memo_type` | optional | Memo type, one of: `id`, `text`, `hash`, `extra`
 `memo` | optional | Memo value, `id` it must be uint64, when `hash` it must be 32 bytes hex value.
 `use_compliance` | optional | When `true` Bridge will use Compliance protocol even if `extra_memo` is empty.
-`extra_memo` | optional | You can include any info here and it will be included in the pre-image of the transaction's memo hash. See the [Hcnet Memo Convention](https://github.com/hcnet/hcnet-protocol/issues/28). When set and compliance server is connected, `memo` and `memo_type` values will be ignored.
+`extra_memo` | optional | You can include any info here and it will be included in the pre-image of the transaction's memo hash. See the [HcNet Memo Convention](https://github.com/hcnet/hcnet-protocol/issues/28). When set and compliance server is connected, `memo` and `memo_type` values will be ignored.
 `asset_code` | optional | Asset code (XLM when empty) destination will receive
 `asset_issuer` | optional | Account ID of asset issuer (XLM when empty) destination will receive
 `send_max` | optional | [path_payment] Maximum amount of send_asset to send

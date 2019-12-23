@@ -10,8 +10,8 @@ import (
 	"github.com/hcnet/go/support/errors"
 )
 
-// GetHcnetToml returns hcnet.toml file for a given domain
-func (c *Client) GetHcnetToml(domain string) (resp *Response, err error) {
+// GetHcNetToml returns hcnet.toml file for a given domain
+func (c *Client) GetHcNetToml(domain string) (resp *Response, err error) {
 	var hresp *http.Response
 	hresp, err = c.HTTP.Get(c.url(domain))
 	if err != nil {
@@ -25,14 +25,14 @@ func (c *Client) GetHcnetToml(domain string) (resp *Response, err error) {
 		return
 	}
 
-	limitReader := io.LimitReader(hresp.Body, HcnetTomlMaxSize)
+	limitReader := io.LimitReader(hresp.Body, HcNetTomlMaxSize)
 	_, err = toml.DecodeReader(limitReader, &resp)
 
 	// There is one corner case not handled here: response is exactly
-	// HcnetTomlMaxSize long and is incorrect toml. Check discussion:
+	// HcNetTomlMaxSize long and is incorrect toml. Check discussion:
 	// https://github.com/hcnet/go/pull/24#discussion_r89909696
 	if err != nil && limitReader.(*io.LimitedReader).N == 0 {
-		err = errors.Errorf("hcnet.toml response exceeds %d bytes limit", HcnetTomlMaxSize)
+		err = errors.Errorf("hcnet.toml response exceeds %d bytes limit", HcNetTomlMaxSize)
 		return
 	}
 
@@ -44,15 +44,15 @@ func (c *Client) GetHcnetToml(domain string) (resp *Response, err error) {
 	return
 }
 
-// GetHcnetTomlByAddress returns hcnet.toml file of a domain fetched from a
+// GetHcNetTomlByAddress returns hcnet.toml file of a domain fetched from a
 // given address
-func (c *Client) GetHcnetTomlByAddress(addy string) (*Response, error) {
+func (c *Client) GetHcNetTomlByAddress(addy string) (*Response, error) {
 	_, domain, err := address.Split(addy)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse address failed")
 	}
 
-	return c.GetHcnetToml(domain)
+	return c.GetHcNetToml(domain)
 }
 
 // url returns the appropriate url to load for resolving domain's hcnet.toml

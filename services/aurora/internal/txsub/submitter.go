@@ -16,7 +16,7 @@ import (
 // `h`.
 func NewDefaultSubmitter(h *http.Client, url string) Submitter {
 	return &submitter{
-		HcnetCore: &hcnetcore.Client{
+		HcNetCore: &hcnetcore.Client{
 			HTTP: h,
 			URL:  url,
 		},
@@ -28,7 +28,7 @@ func NewDefaultSubmitter(h *http.Client, url string) Submitter {
 // submits directly to the configured hcnet-core instance using the
 // configured http client.
 type submitter struct {
-	HcnetCore *hcnetcore.Client
+	HcNetCore *hcnetcore.Client
 	Log         *log.Entry
 }
 
@@ -44,7 +44,7 @@ func (sub *submitter) Submit(ctx context.Context, env string) (result Submission
 		}).Info("Submitter result")
 	}()
 
-	cresp, err := sub.HcnetCore.SubmitTransaction(ctx, env)
+	cresp, err := sub.HcNetCore.SubmitTransaction(ctx, env)
 	if err != nil {
 		result.Err = errors.Wrap(err, "failed to submit")
 		return
@@ -59,7 +59,7 @@ func (sub *submitter) Submit(ctx context.Context, env string) (result Submission
 	switch cresp.Status {
 	case proto.TXStatusError:
 		result.Err = &FailedTransactionError{cresp.Error}
-	case proto.TXStatusPending, proto.TXStatusDuplicate:
+	case proto.TXStatusPending, proto.TXStatusDuplicate, proto.TXStatusTryAgainLater:
 		//noop.  A nil Err indicates success
 	default:
 		result.Err = errors.Errorf("Unrecognized hcnet-core status response: %s", cresp.Status)

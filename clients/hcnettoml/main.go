@@ -2,8 +2,8 @@ package hcnettoml
 
 import "net/http"
 
-// HcnetTomlMaxSize is the maximum size of hcnet.toml file
-const HcnetTomlMaxSize = 5 * 1024
+// HcNetTomlMaxSize is the maximum size of hcnet.toml file
+const HcNetTomlMaxSize = 100 * 1024
 
 // WellKnownPath represents the url path at which the hcnet.toml file should
 // exist to conform to the federation protocol.
@@ -12,10 +12,10 @@ const WellKnownPath = "/.well-known/hcnet.toml"
 // DefaultClient is a default client using the default parameters
 var DefaultClient = &Client{HTTP: http.DefaultClient}
 
-// Client represents a client that is capable of resolving a Hcnet.toml file
+// Client represents a client that is capable of resolving a HcNet.toml file
 // using the internet.
 type Client struct {
-	// HTTP is the http client used when resolving a Hcnet.toml file
+	// HTTP is the http client used when resolving a HcNet.toml file
 	HTTP HTTP
 
 	// UseHTTP forces the client to resolve against servers using plain HTTP.
@@ -24,8 +24,8 @@ type Client struct {
 }
 
 type ClientInterface interface {
-	GetHcnetToml(domain string) (*Response, error)
-	GetHcnetTomlByAddress(addy string) (*Response, error)
+	GetHcNetToml(domain string) (*Response, error)
+	GetHcNetTomlByAddress(addy string) (*Response, error)
 }
 
 // HTTP represents the http client that a stellertoml resolver uses to make http
@@ -42,13 +42,13 @@ type Response struct {
 	SigningKey       string `toml:"SIGNING_KEY"`
 }
 
-// GetHcnetToml returns hcnet.toml file for a given domain
-func GetHcnetToml(domain string) (*Response, error) {
-	return DefaultClient.GetHcnetToml(domain)
+// GetHcNetToml returns hcnet.toml file for a given domain
+func GetHcNetToml(domain string) (*Response, error) {
+	return DefaultClient.GetHcNetToml(domain)
 }
 
-// GetHcnetTomlByAddress returns hcnet.toml file of a domain fetched from a
+// GetHcNetTomlByAddress returns hcnet.toml file of a domain fetched from a
 // given address
-func GetHcnetTomlByAddress(addy string) (*Response, error) {
-	return DefaultClient.GetHcnetTomlByAddress(addy)
+func GetHcNetTomlByAddress(addy string) (*Response, error) {
+	return DefaultClient.GetHcNetTomlByAddress(addy)
 }

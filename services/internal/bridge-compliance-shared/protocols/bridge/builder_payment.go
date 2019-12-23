@@ -2,10 +2,10 @@ package bridge
 
 import (
 	"github.com/hcnet/go/amount"
-	b "github.com/hcnet/go/build"
 	shared "github.com/hcnet/go/services/internal/bridge-compliance-shared"
 	"github.com/hcnet/go/services/internal/bridge-compliance-shared/http/helpers"
 	"github.com/hcnet/go/services/internal/bridge-compliance-shared/protocols"
+	"github.com/hcnet/go/txnbuild"
 )
 
 // PaymentOperationBody represents payment operation
@@ -16,29 +16,19 @@ type PaymentOperationBody struct {
 	Asset       protocols.Asset
 }
 
-// ToTransactionMutator returns go-hcnet-base TransactionMutator
-func (op PaymentOperationBody) ToTransactionMutator() b.TransactionMutator {
-	mutators := []interface{}{
-		b.Destination{op.Destination},
-	}
-
-	if op.Asset.Code != "" && op.Asset.Issuer != "" {
-		mutators = append(
-			mutators,
-			b.CreditAmount{op.Asset.Code, op.Asset.Issuer, op.Amount},
-		)
-	} else {
-		mutators = append(
-			mutators,
-			b.NativeAmount{op.Amount},
-		)
+// Build returns a txnbuild.Operation
+func (op PaymentOperationBody) Build() txnbuild.Operation {
+	txnOp := txnbuild.Payment{
+		Destination: op.Destination,
+		Amount:      op.Amount,
+		Asset:       op.Asset.ToBaseAsset(),
 	}
 
 	if op.Source != nil {
-		mutators = append(mutators, b.SourceAccount{*op.Source})
+		txnOp.SourceAccount = &txnbuild.SimpleAccount{AccountID: *op.Source}
 	}
 
-	return b.Payment(mutators...)
+	return &txnOp
 }
 
 // Validate validates if operation body is valid.

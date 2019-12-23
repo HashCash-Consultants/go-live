@@ -52,16 +52,16 @@ func (r *AuthRequest) VerifySignature(sender string) error {
 		return errors.New("Signature is not base64 encoded")
 	}
 
-	senderHcnetToml, err := hcnettoml.GetHcnetTomlByAddress(sender)
+	senderHcNetToml, err := hcnettoml.GetHcNetTomlByAddress(sender)
 	if err != nil {
 		return errors.Wrap(err, "Cannot get hcnet.toml of sender domain")
 	}
 
-	if senderHcnetToml.SigningKey == "" {
+	if senderHcNetToml.SigningKey == "" {
 		return errors.New("No SIGNING_KEY in hcnet.toml of sender")
 	}
 
-	kp, err := keypair.Parse(senderHcnetToml.SigningKey)
+	kp, err := keypair.Parse(senderHcNetToml.SigningKey)
 	if err != nil {
 		return errors.New("SigningKey is invalid")
 	}

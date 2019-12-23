@@ -3,22 +3,22 @@ title: Aurora Administration Guide
 ---
 ## Aurora Administration Guide
 
-Aurora is responsible for providing an HTTP API to data in the Hcnet network. It ingests and re-serves the data produced by the hcnet network in a form that is easier to consume than the performance-oriented data representations used by hcnet-core.
+Aurora is responsible for providing an HTTP API to data in the HcNet network. It ingests and re-serves the data produced by the hcnet network in a form that is easier to consume than the performance-oriented data representations used by hcnet-core.
 
 This document describes how to administer a **production** Aurora instance. If you are just starting with Aurora and want to try it out, consider the [Quickstart Guide](quickstart.md) instead. For information about developing on the Aurora codebase, check out the [Development Guide](developing.md).
 
 ## Why run Aurora?
 
-The Hcnet Development Foundation runs two Aurora servers, one for the public network and one for the test network, free for anyone's use at https://aurora.hcnet.org and https://aurora-testnet.hcnet.org.  These servers should be fine for development and small scale projects, but it is not recommended that you use them for production services that need strong reliability.  By running Aurora within your own infrastructure provides a number of benefits:
+The HcNet Development Foundation runs two Aurora servers, one for the public network and one for the test network, free for anyone's use at https://aurora.hcnet.org and https://aurora-testnet.hcnet.org.  These servers should be fine for development and small scale projects, but it is not recommended that you use them for production services that need strong reliability.  By running Aurora within your own infrastructure provides a number of benefits:
 
   - Multiple instances can be run for redundancy and scalability.
   - Request rate limiting can be disabled.
-  - Full operational control without dependency on the Hcnet Development Foundations operations.
+  - Full operational control without dependency on the HcNet Development Foundations operations.
 
 ## Prerequisites
 
 Aurora is dependent upon a hcnet-core server.  Aurora needs access to both the SQL database and the HTTP API that is published by hcnet-core. See [the administration guide](https://www.hcnet.org/developers/hcnet-core/learn/admin.html
-) to learn how to set up and administer a hcnet-core server.  Secondly, Aurora is dependent upon a postgres server, which it uses to store processed core data for ease of use. Aurora requires postgres version >= 9.3.
+) to learn how to set up and administer a hcnet-core server.  Secondly, Aurora is dependent upon a postgres server, which it uses to store processed core data for ease of use. Aurora requires postgres version >= 9.5.
 
 In addition to the two prerequisites above, you may optionally install a redis server to be used for rate limiting requests.
 
@@ -36,14 +36,14 @@ To test the installation, simply run `aurora --help` from a terminal.  If the he
 Should you decide not to use one of our prebuilt releases, you may instead build Aurora from source.  To do so, you need to install some developer tools:
 
 - A unix-like operating system with the common core commands (cp, tar, mkdir, bash, etc.)
-- A compatible distribution of Go (we officially support Go 1.9 and later)
+- A compatible distribution of Go (we officially support Go 1.10 and later)
 - [go-dep](https://golang.github.io/dep/)
 - [git](https://git-scm.com/)
 - [mercurial](https://www.mercurial-scm.org/)
 
 
 1. Set your [GOPATH](https://github.com/golang/go/wiki/GOPATH) environment variable, if you haven't already. The default `GOPATH` is `$HOME/go`.
-2. Clone the Hcnet Go monorepo:  `go get github.com/hcnet/go`. You should see the repository cloned at `$GOPATH/src/github.com/hcnet/go`.
+2. Clone the HcNet Go monorepo:  `go get github.com/hcnet/go`. You should see the repository cloned at `$GOPATH/src/github.com/hcnet/go`.
 3. Enter the source dir: `cd $GOPATH/src/github.com/hcnet/go`, and download external dependencies: `dep ensure -v`. You should see the downloaded third party dependencies in `$GOPATH/pkg`.
 4. Compile the Aurora binary: `cd $GOPATH; go install github.com/hcnet/go/services/aurora`. You should see the `aurora` binary in `$GOPATH/bin`.
 5. Add Go binaries to your PATH in your `bashrc` or equivalent, for easy access: `export PATH=${GOPATH//://bin:}/bin:$PATH`
@@ -75,7 +75,7 @@ Specifying command line flags every time you invoke Aurora can be cumbersome, an
 
 ## Preparing the database
 
-Before the Aurora server can be run, we must first prepare the Aurora database.  This database will be used for all of the information produced by Aurora, notably historical information about successful transactions that have occurred on the hcnet network.  
+Before the Aurora server can be run, we must first prepare the Aurora database.  This database will be used for all of the information produced by Aurora, notably historical information about successful transactions that have occurred on the hcnet network.
 
 To prepare a database for Aurora's use, first you must ensure the database is blank.  It's easiest to simply create a new database on your postgres server specifically for Aurora's use.  Next you must install the schema by running `aurora db init`.  Remember to use the appropriate command line flags or environment variables to configure Aurora as explained in [Configuring ](#Configuring).  This command will log any errors that occur.
 
@@ -93,16 +93,44 @@ INFO[0000] Starting aurora on :8000                     pid=29013
 
 The log line above announces that Aurora is ready to serve client requests. Note: the numbers shown above may be different for your installation.  Next we can confirm that Aurora is responding correctly by loading the root resource.  In the example above, that URL would be [http://127.0.0.1:8000/] and simply running `curl http://127.0.0.1:8000/` shows you that the root resource can be loaded correctly.
 
+If you didn't set up a hcnet-core yet, you may see an error like this:
+```
+ERRO[2019-05-06T16:21:14.126+08:00] Error getting core latest ledger err="get failed: pq: relation \"ledgerheaders\" does not exist"
+```
+Aurora requires a functional hcnet-core. Go back and set up hcnet-core as described in the admin guide. In particular, you need to initialise the database as [described here](https://www.hcnet.org/developers/hcnet-core/software/admin.html#database-and-local-state).
 
 ## Ingesting live hcnet-core data
 
-Aurora provides most of its utility through ingested data.  Your Aurora server can be configured to listen for and ingest transaction results from the connected hcnet-core.  We recommend that within your infrastructure you run one (and only one) Aurora process that is configured in this way.   While running multiple ingestion processes will not corrupt the Aurora database, your error logs will quickly fill up as the two instances race to ingest the data from hcnet-core.  We may develop a system that coordinates multiple Aurora processes in the future, but we would also be happy to include an external contribution that accomplishes this.
+Aurora provides most of its utility through ingested data.  Your Aurora server can be configured
+to listen for and ingest transaction results from the connected hcnet-core.  We recommend that
+within your infrastructure you run one (and only one) Aurora process that is configured in this
+way. While running multiple ingestion processes will not corrupt the Aurora database, your error
+logs will quickly fill up as the two instances race to ingest the data from hcnet-core. A notable
+exception to this is when you are reingesting data, which we recommend using multiple processes for
+speed (more on this below).
 
-To enable ingestion, you must either pass `--ingest=true` on the command line or set the `INGEST` environment variable to "true".
+To enable ingestion, you must either pass `--ingest=true` on the command line or set the `INGEST`
+environment variable to "true".
 
 ### Ingesting historical data
 
-To enable ingestion of historical data from hcnet-core you need to run `aurora db backfill NUM_LEDGERS`. If you're running a full validator with published history archive, for example, you might want to ingest all of history. In this case your `NUM_LEDGERS` should be slightly higher than the current ledger id on the network. You can run this process in the background while your Aurora server is up. This continuously decrements the `history.elder_ledger` in your /metrics endpoint until `NUM_LEDGERS` is reached and the backfill is complete. 
+To enable ingestion of historical data from hcnet-core you need to run `aurora db backfill NUM_LEDGERS`. If you're running a full validator with published history archive, for example, you might want to ingest all of history. In this case your `NUM_LEDGERS` should be slightly higher than the current ledger id on the network. You can run this process in the background while your Aurora server is up. This continuously decrements the `history.elder_ledger` in your /metrics endpoint until `NUM_LEDGERS` is reached and the backfill is complete.
+
+### Reingesting Ledgers
+A notable exception to running only a single Aurora process is when you are reingesting ledgers,
+which we recommend you run multiple processes for in order to dramatically speed up re-ingestion
+time. This is done through the `aurora db range [START_LEDGER] [END_LEDGER]` command, which could
+be run as follows:
+
+```
+aurora1> aurora db reingest range 1 10000
+aurora2> aurora db reingest range 10001 20000
+aurora3> aurora db reingest range 20001 30000
+# ... etc.
+```
+
+This allows reingestion to be split up and done in parallel by multiple Aurora processes, and is
+available as of Aurora [0.17.4](https://github.com/hcnet/go/releases/tag/aurora-v0.17.4).
 
 ### Managing storage for historical data
 
@@ -123,10 +151,10 @@ In the section above, we mentioned that Aurora _tries_ to maintain a gap-free wi
 We recommend you configure the HISTORY_RETENTION_COUNT in Aurora to a value less than or equal to the configured value for CATCHUP_RECENT in hcnet-core.  Given this situation any downtime that would cause a ledger gap will require a downtime greater than the amount of historical data retained by Aurora.  To re-establish continuity:
 
 1.  Stop Aurora.
-2.  run `aurora db reap` to clear the historical database.
+2.  Run `aurora db reap` to clear the historical database.
 3.  Clear the cursor for Aurora by running `hcnet-core -c "dropcursor?id=HORIZON"` (ensure capitilization is maintained).
 4.  Clear ledger metadata from before the gap by running `hcnet-core -c "maintenance?queue=true"`.
-5.  Restart Aurora.    
+5.  Restart Aurora.
 
 ## Managing Stale Historical Data
 
@@ -136,7 +164,7 @@ To help applications that cannot tolerate lag, Aurora provides a configurable "s
 
 ## Monitoring
 
-To ensure that your instance of Aurora is performing correctly we encourage you to monitor it, and provide both logs and metrics to do so.  
+To ensure that your instance of Aurora is performing correctly we encourage you to monitor it, and provide both logs and metrics to do so.
 
 Aurora will output logs to standard out.  Information about what requests are coming in will be reported, but more importantly, warnings or errors will also be emitted by default.  A correctly running Aurora instance will not output any warning or error log entries.
 
@@ -144,4 +172,8 @@ Metrics are collected while a Aurora process is running and they are exposed at 
 
 ## I'm Stuck! Help!
 
-If any of the above steps don't work or you are otherwise prevented from correctly setting up Aurora, please come to our community and tell us.  Either [post a question at our Stack Exchange](https://hcnet.stackexchange.com/) or [chat with us on slack](http://slack.hcnet.org/) to ask for help.
+If any of the above steps don't work or you are otherwise prevented from correctly setting up
+Aurora, please come to our community and tell us. Either
+[post a question at our Stack Exchange](https://hcnet.stackexchange.com/) or
+[chat with us on Keybase in #dev_discussion](https://keybase.io/team/hcnet.public) to ask for
+help.

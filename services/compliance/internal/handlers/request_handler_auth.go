@@ -46,7 +46,7 @@ func (rh *RequestHandler) HandlerAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	senderHcnetToml, err := rh.HcnetTomlResolver.GetHcnetTomlByAddress(authData.Sender)
+	senderHcNetToml, err := rh.HcNetTomlResolver.GetHcNetTomlByAddress(authData.Sender)
 	if err != nil {
 		log.WithFields(log.Fields{"err": err, "sender": authData.Sender}).Warn("Cannot get hcnet.toml of sender")
 		errorResponse := httpHelpers.NewInvalidParameterError("data.sender", "Cannot get hcnet.toml of sender")
@@ -54,7 +54,7 @@ func (rh *RequestHandler) HandlerAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !shared.IsValidAccountID(senderHcnetToml.SigningKey) {
+	if !shared.IsValidAccountID(senderHcNetToml.SigningKey) {
 		errorResponse := httpHelpers.NewInvalidParameterError("data.sender", "SIGNING_KEY in hcnet.toml of sender is invalid")
 		// TODO
 		// log.WithFields(errorResponse.LogData).Warn("SIGNING_KEY in hcnet.toml of sender is invalid")
@@ -71,10 +71,10 @@ func (rh *RequestHandler) HandlerAuth(w http.ResponseWriter, r *http.Request) {
 		httpHelpers.Write(w, errorResponse)
 		return
 	}
-	err = rh.SignatureSignerVerifier.Verify(senderHcnetToml.SigningKey, []byte(authreq.DataJSON), signatureBytes)
+	err = rh.SignatureSignerVerifier.Verify(senderHcNetToml.SigningKey, []byte(authreq.DataJSON), signatureBytes)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"signing_key": senderHcnetToml.SigningKey,
+			"signing_key": senderHcNetToml.SigningKey,
 			"data":        authreq.Data,
 			"sig":         authreq.Signature,
 		}).Warn("Invalid signature")

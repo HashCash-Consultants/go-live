@@ -104,7 +104,7 @@ func (c *Client) ForwardRequest(domain string, fields url.Values) (*proto.NameRe
 }
 
 func (c *Client) getFederationServer(domain string) (string, error) {
-	stoml, err := c.HcnetTOML.GetHcnetToml(domain)
+	stoml, err := c.HcNetTOML.GetHcNetToml(domain)
 	if err != nil {
 		return "", errors.Wrap(err, "get hcnet.toml failed")
 	}

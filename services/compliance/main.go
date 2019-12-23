@@ -138,7 +138,7 @@ func NewApp(config config.Config, migrateFlag bool, versionFlag bool, version st
 
 	federationClient := federation.Client{
 		HTTP:        &httpClientWithTimeout,
-		HcnetTOML: &hcnettomlClient,
+		HcNetTOML: &hcnettomlClient,
 	}
 
 	err = g.Provide(
