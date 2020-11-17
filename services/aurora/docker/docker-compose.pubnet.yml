@@ -1,0 +1,9 @@
+version: '3'
+services:
+  core:
+    volumes:
+      - ./hcnet-core-pubnet.cfg:/hcnet-core.cfg
+  aurora:
+    environment:
+      - HISTORY_ARCHIVE_URLS=https://history.hcnet.org/prd/core-live/core_live_001
+      - NETWORK_PASSPHRASE=Public Global Hcnet Network ; September 2015
