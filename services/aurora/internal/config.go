@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/hcnet/throttled"
+	"github.com/stellar/throttled"
 )
 
 // Config is the configuration for aurora.  It gets populated by the

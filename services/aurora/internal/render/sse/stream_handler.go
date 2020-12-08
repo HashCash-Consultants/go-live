@@ -5,7 +5,7 @@ import (
 
 	"github.com/hcnet/go/services/aurora/internal/ledger"
 	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/throttled"
+	"github.com/stellar/throttled"
 )
 
 type LedgerSourceFactory interface {

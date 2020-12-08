@@ -13,7 +13,7 @@ import (
 	support "github.com/hcnet/go/support/config"
 	"github.com/hcnet/go/support/db"
 	"github.com/hcnet/go/support/log"
-	"github.com/hcnet/throttled"
+	"github.com/stellar/throttled"
 )
 
 const (

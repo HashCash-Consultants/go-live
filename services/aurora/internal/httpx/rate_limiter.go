@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hcnet/throttled"
+	"github.com/stellar/throttled"
 
 	"github.com/hcnet/go/services/aurora/internal/ledger"
 	hProblem "github.com/hcnet/go/services/aurora/internal/render/problem"

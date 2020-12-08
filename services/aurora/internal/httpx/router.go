@@ -14,7 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
 	"github.com/sebest/xff"
-	"github.com/hcnet/throttled"
+	"github.com/stellar/throttled"
 
 	"github.com/hcnet/go/services/aurora/internal/actions"
 	"github.com/hcnet/go/services/aurora/internal/paths"
