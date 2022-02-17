@@ -5,10 +5,16 @@ To build aurora you must have go and dep in your ubuntu enivironment. To install
 
 # Install go
 
+- Download and upload the latest version of go lang tar file for ubuntu linux
 
-- sudo curl -O https://storage.googleapis.com/golang/go1.9.1.linux-amd64.tar.gz
-- sudo tar -xvf go1.16.14.linux-amd64.tar.gz
-- Open vi .profile file and add following lines:
+```
+sudo tar -xvf go1.16.14.linux-amd64.tar.gz
+```
+- Open vi .profile file
+```
+vi .profile
+```
+- Add following lines in vi .profile
 ```ssh
 PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 export GOPATH=$HOME/go
@@ -16,6 +22,10 @@ export PATH=${GOPATH}/bin:${PATH}
 and save the file
 ```
 - Open vi .bashrc and add following lines
+```
+vi .bashrc
+```
+- Add following lines in vi .bashrc:
 ```ssh
 eval "$(direnv hook bash)"
 export GOPATH=$HOME/go
@@ -33,13 +43,13 @@ $ go version
 
 # Install aurora
 
-- mkdir github.com/hcnet in /home/ubuntu/go/src
-- go to /home/ubuntu/go/src/github.com/hcnet and execute following command:
+- mkdir github.com/hcnet in /go/src
+- go to /go/src/github.com/hcnet and execute following command:
 - git clone https://github.com/HashCash-Consultants/go.git
-- go to /home/ubuntu/go/src/github.com/hcnet /go and execute following command:
+- go to /go/src/github.com/hcnet /go and execute following command:
 
 ```
-$ go to /home/ubuntu/go/src
+$ go to /go/src
 
 $ go install -v ./services/aurora
 ```
