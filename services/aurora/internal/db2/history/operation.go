@@ -9,8 +9,8 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/hcnet/go/services/aurora/internal/db2"
-	"github.com/hcnet/go/services/aurora/internal/toid"
 	"github.com/hcnet/go/support/errors"
+	"github.com/hcnet/go/toid"
 	"github.com/hcnet/go/xdr"
 )
 

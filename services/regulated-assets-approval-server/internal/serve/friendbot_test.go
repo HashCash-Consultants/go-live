@@ -295,7 +295,7 @@ func TestFriendbotHandler_serveHTTP(t *testing.T) {
 		On("AccountDetail", auroraclient.AccountRequest{AccountID: "GDDIO6SFRD4SJEQFJOSKPIDYTDM7LM4METFBKN4NFGVR5DTGB7H75N5S"}).
 		Return(aurora.Account{
 			AccountID: "GDDIO6SFRD4SJEQFJOSKPIDYTDM7LM4METFBKN4NFGVR5DTGB7H75N5S",
-			Sequence:  "1",
+			Sequence:  1,
 		}, nil)
 	auroraMock.
 		On("SubmitTransaction", mock.AnythingOfType("*txnbuild.Transaction")).

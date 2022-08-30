@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"runtime"
 
+	"github.com/hcnet/go/services/aurora/internal/paths"
+
 	"github.com/getsentry/raven-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/hcnet/go/exp/orderbook"
@@ -17,9 +19,9 @@ import (
 	"github.com/hcnet/go/support/log"
 )
 
-func mustNewDBSession(subservice db.Subservice, databaseURL string, maxIdle, maxOpen int, registry *prometheus.Registry) db.SessionInterface {
+func mustNewDBSession(subservice db.Subservice, databaseURL string, maxIdle, maxOpen int, registry *prometheus.Registry, clientConfigs ...db.ClientConfig) db.SessionInterface {
 	log.Infof("Establishing database session for %v", subservice)
-	session, err := db.Open("postgres", databaseURL)
+	session, err := db.Open("postgres", databaseURL, clientConfigs...)
 	if err != nil {
 		log.Fatalf("cannot open %v DB: %v", subservice, err)
 	}
@@ -46,21 +48,36 @@ func mustInitAuroraDB(app *App) {
 	}
 
 	if app.config.RoDatabaseURL == "" {
+		var clientConfigs []db.ClientConfig
+		if !app.config.Ingest {
+			// if we are not ingesting then we don't expect to have long db queries / transactions
+			clientConfigs = append(
+				clientConfigs,
+				db.StatementTimeout(app.config.ConnectionTimeout),
+				db.IdleTransactionTimeout(app.config.ConnectionTimeout),
+			)
+		}
 		app.historyQ = &history.Q{mustNewDBSession(
 			db.HistorySubservice,
 			app.config.DatabaseURL,
 			maxIdle,
 			maxOpen,
 			app.prometheusRegistry,
+			clientConfigs...,
 		)}
 	} else {
 		// If RO set, use it for all DB queries
+		roClientConfigs := []db.ClientConfig{
+			db.StatementTimeout(app.config.ConnectionTimeout),
+			db.IdleTransactionTimeout(app.config.ConnectionTimeout),
+		}
 		app.historyQ = &history.Q{mustNewDBSession(
 			db.HistorySubservice,
 			app.config.RoDatabaseURL,
 			maxIdle,
 			maxOpen,
 			app.prometheusRegistry,
+			roClientConfigs...,
 		)}
 
 		app.primaryHistoryQ = &history.Q{mustNewDBSession(
@@ -95,11 +112,15 @@ func initIngester(app *App) {
 		HcnetCoreCursor:            app.config.CursorName,
 		CaptiveCoreBinaryPath:        app.config.CaptiveCoreBinaryPath,
 		CaptiveCoreStoragePath:       app.config.CaptiveCoreStoragePath,
+		CaptiveCoreConfigUseDB:       app.config.CaptiveCoreConfigUseDB,
 		CaptiveCoreToml:              app.config.CaptiveCoreToml,
 		RemoteCaptiveCoreURL:         app.config.RemoteCaptiveCoreURL,
 		EnableCaptiveCore:            app.config.EnableCaptiveCoreIngestion,
 		DisableStateVerification:     app.config.IngestDisableStateVerification,
+		EnableReapLookupTables:       app.config.HistoryRetentionCount > 0,
 		EnableExtendedLogLedgerStats: app.config.IngestEnableExtendedLogLedgerStats,
+		RoundingSlippageFilter:       app.config.RoundingSlippageFilter,
+		EnableIngestionFiltering:     app.config.EnableIngestionFiltering,
 	})
 
 	if err != nil {
@@ -108,13 +129,20 @@ func initIngester(app *App) {
 }
 
 func initPathFinder(app *App) {
+	if app.config.DisablePathFinding {
+		return
+	}
 	orderBookGraph := orderbook.NewOrderBookGraph()
 	app.orderBookStream = ingest.NewOrderBookStream(
 		&history.Q{app.AuroraSession()},
 		orderBookGraph,
 	)
 
-	app.paths = simplepath.NewInMemoryFinder(orderBookGraph, !app.config.DisablePoolPathFinding)
+	var finder paths.Finder = simplepath.NewInMemoryFinder(orderBookGraph, !app.config.DisablePoolPathFinding)
+	if app.config.MaxPathFindingRequests != 0 {
+		finder = paths.NewRateLimitedFinder(finder, app.config.MaxPathFindingRequests)
+	}
+	app.paths = finder
 }
 
 // initSentry initialized the default sentry client with the configured DSN
@@ -170,7 +198,9 @@ func initDbMetrics(app *App) {
 
 	app.coreState.RegisterMetrics(app.prometheusRegistry)
 
-	app.prometheusRegistry.MustRegister(app.orderBookStream.LatestLedgerGauge)
+	if !app.config.DisablePathFinding {
+		app.prometheusRegistry.MustRegister(app.orderBookStream.LatestLedgerGauge)
+	}
 }
 
 // initGoMetrics registers the Go collector provided by prometheus package which

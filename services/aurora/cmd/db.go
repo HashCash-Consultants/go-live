@@ -92,7 +92,7 @@ func migrate(dir schema.MigrateDir, count int) error {
 
 var dbMigrateDownCmd = &cobra.Command{
 	Use:   "down COUNT",
-	Short: "run upwards db schema migrations",
+	Short: "run downwards db schema migrations",
 	Long:  "performs a downards schema migration command",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAndSetFlag(aurora.DatabaseURLFlagName); err != nil {
@@ -374,39 +374,43 @@ var dbFillGapsCmd = &cobra.Command{
 }
 
 func runDBReingestRange(ledgerRanges []history.LedgerRange, reingestForce bool, parallelWorkers uint, config aurora.Config) error {
+	var err error
+
 	if reingestForce && parallelWorkers > 1 {
 		return errors.New("--force is incompatible with --parallel-workers > 1")
-	}
-	auroraSession, err := db.Open("postgres", config.DatabaseURL)
-	if err != nil {
-		return fmt.Errorf("cannot open Aurora DB: %v", err)
 	}
 
 	ingestConfig := ingest.Config{
 		NetworkPassphrase:           config.NetworkPassphrase,
-		HistorySession:              auroraSession,
 		HistoryArchiveURL:           config.HistoryArchiveURLs[0],
 		CheckpointFrequency:         config.CheckpointFrequency,
+		ReingestEnabled:             true,
 		MaxReingestRetries:          int(retries),
 		ReingestRetryBackoffSeconds: int(retryBackoffSeconds),
 		EnableCaptiveCore:           config.EnableCaptiveCoreIngestion,
 		CaptiveCoreBinaryPath:       config.CaptiveCoreBinaryPath,
+		CaptiveCoreConfigUseDB:      config.CaptiveCoreConfigUseDB,
 		RemoteCaptiveCoreURL:        config.RemoteCaptiveCoreURL,
 		CaptiveCoreToml:             config.CaptiveCoreToml,
 		CaptiveCoreStoragePath:      config.CaptiveCoreStoragePath,
 		HcnetCoreCursor:           config.CursorName,
 		HcnetCoreURL:              config.HcnetCoreURL,
+		RoundingSlippageFilter:      config.RoundingSlippageFilter,
+		EnableIngestionFiltering:    config.EnableIngestionFiltering,
 	}
 
-	if !ingestConfig.EnableCaptiveCore {
+	if ingestConfig.HistorySession, err = db.Open("postgres", config.DatabaseURL); err != nil {
+		return fmt.Errorf("cannot open Aurora DB: %v", err)
+	}
+
+	if !config.EnableCaptiveCoreIngestion {
 		if config.HcnetCoreDatabaseURL == "" {
 			return fmt.Errorf("flag --%s cannot be empty", aurora.HcnetCoreDBURLFlagName)
 		}
-		coreSession, dbErr := db.Open("postgres", config.HcnetCoreDatabaseURL)
-		if dbErr != nil {
-			return fmt.Errorf("cannot open Core DB: %v", dbErr)
+		if ingestConfig.CoreSession, err = db.Open("postgres", config.HcnetCoreDatabaseURL); err != nil {
+			ingestConfig.HistorySession.Close()
+			return fmt.Errorf("cannot open Core DB: %v", err)
 		}
-		ingestConfig.CoreSession = coreSession
 	}
 
 	if parallelWorkers > 1 {
@@ -425,6 +429,7 @@ func runDBReingestRange(ledgerRanges []history.LedgerRange, reingestForce bool, 
 	if systemErr != nil {
 		return systemErr
 	}
+	defer system.Shutdown()
 
 	err = system.ReingestRange(ledgerRanges, reingestForce)
 	if err != nil {
@@ -477,6 +482,7 @@ func runDBDetectGaps(config aurora.Config) ([]history.LedgerRange, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer auroraSession.Close()
 	q := &history.Q{auroraSession}
 	return q.GetLedgerGaps(context.Background())
 }
@@ -486,6 +492,7 @@ func runDBDetectGapsInRange(config aurora.Config, start, end uint32) ([]history.
 	if err != nil {
 		return nil, err
 	}
+	defer auroraSession.Close()
 	q := &history.Q{auroraSession}
 	return q.GetLedgerGapsInRange(context.Background(), start, end)
 }

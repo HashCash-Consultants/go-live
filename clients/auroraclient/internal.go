@@ -8,19 +8,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hcnet/go/support/clock"
 	"github.com/hcnet/go/support/errors"
 )
 
 // decodeResponse decodes the response from a request to a aurora server
-func decodeResponse(resp *http.Response, object interface{}, hc *Client) (err error) {
+func decodeResponse(resp *http.Response, object interface{}, auroraUrl string, clock *clock.Clock) (err error) {
 	defer resp.Body.Close()
+	if object == nil {
+		// Nothing to decode
+		return nil
+	}
 	decoder := json.NewDecoder(resp.Body)
 
-	u, err := url.Parse(hc.AuroraURL)
+	u, err := url.Parse(auroraUrl)
 	if err != nil {
-		return errors.Errorf("unable to parse the provided aurora url: %s", hc.AuroraURL)
+		return errors.Errorf("unable to parse the provided aurora url: %s", auroraUrl)
 	}
-	setCurrentServerTime(u.Hostname(), resp.Header["Date"], hc)
+	setCurrentServerTime(u.Hostname(), resp.Header["Date"], clock)
 
 	if !(resp.StatusCode >= 200 && resp.StatusCode < 300) {
 		auroraError := &Error{
@@ -32,7 +37,6 @@ func decodeResponse(resp *http.Response, object interface{}, hc *Client) (err er
 		}
 		return auroraError
 	}
-
 	err = decoder.Decode(&object)
 	if err != nil {
 		return errors.Wrap(err, "error decoding response")
@@ -120,7 +124,7 @@ func addQueryParams(params ...interface{}) string {
 }
 
 // setCurrentServerTime saves the current time returned by a aurora server
-func setCurrentServerTime(host string, serverDate []string, hc *Client) {
+func setCurrentServerTime(host string, serverDate []string, clock *clock.Clock) {
 	if len(serverDate) == 0 {
 		return
 	}
@@ -129,7 +133,7 @@ func setCurrentServerTime(host string, serverDate []string, hc *Client) {
 		return
 	}
 	serverTimeMapMutex.Lock()
-	ServerTimeMap[host] = ServerTimeRecord{ServerTime: st.UTC().Unix(), LocalTimeRecorded: hc.clock.Now().UTC().Unix()}
+	ServerTimeMap[host] = ServerTimeRecord{ServerTime: st.UTC().Unix(), LocalTimeRecorded: clock.Now().UTC().Unix()}
 	serverTimeMapMutex.Unlock()
 }
 

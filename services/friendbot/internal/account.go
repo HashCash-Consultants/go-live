@@ -1,8 +1,6 @@
 package internal
 
 import (
-	"strconv"
-
 	"github.com/hcnet/go/clients/auroraclient"
 	"github.com/hcnet/go/support/errors"
 )
@@ -36,10 +34,6 @@ func (a *Account) RefreshSequenceNumber(hclient auroraclient.ClientInterface) er
 	if err != nil {
 		return errors.Wrap(err, "getting account detail")
 	}
-	seq, err := strconv.ParseInt(accountDetail.Sequence, 10, 64)
-	if err != nil {
-		return errors.Wrap(err, "parsing account seqnum")
-	}
-	a.Sequence = seq
+	a.Sequence = accountDetail.Sequence
 	return nil
 }

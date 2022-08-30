@@ -43,7 +43,7 @@ func TestSetup_accountAlreadyConfigured(t *testing.T) {
 				AuthRevocable: true,
 			},
 			HomeDomain: "domain.test.com",
-			Sequence:   "10",
+			Sequence:   10,
 		}, nil)
 	auroraMock.
 		On("Assets", auroraclient.AssetRequest{
@@ -93,7 +93,7 @@ func TestSetup(t *testing.T) {
 		On("AccountDetail", auroraclient.AccountRequest{AccountID: issuerKP.Address()}).
 		Return(aurora.Account{
 			AccountID: issuerKP.Address(),
-			Sequence:  "10",
+			Sequence:  10,
 		}, nil)
 	auroraMock.
 		On("Assets", auroraclient.AssetRequest{

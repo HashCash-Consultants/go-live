@@ -5,9 +5,9 @@ import (
 	"time"
 
 	herrors "github.com/hcnet/go/services/aurora/internal/errors"
-	"github.com/hcnet/go/services/aurora/internal/toid"
 	"github.com/hcnet/go/support/errors"
 	"github.com/hcnet/go/support/log"
+	"github.com/hcnet/go/toid"
 )
 
 // DeleteUnretainedHistory removes all data associated with unretained ledgers.

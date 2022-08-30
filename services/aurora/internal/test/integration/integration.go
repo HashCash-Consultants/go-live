@@ -41,11 +41,11 @@ const (
 )
 
 var (
-	RunWithCaptiveCore = os.Getenv("HORIZON_INTEGRATION_ENABLE_CAPTIVE_CORE") != ""
+	RunWithCaptiveCore      = os.Getenv("HORIZON_INTEGRATION_TESTS_ENABLE_CAPTIVE_CORE") != ""
+	RunWithCaptiveCoreUseDB = os.Getenv("HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_USE_DB") != ""
 )
 
 type Config struct {
-	PostgresURL           string
 	ProtocolVersion       uint32
 	SkipContainerCreation bool
 	CoreDockerImage       string
@@ -63,13 +63,15 @@ type Config struct {
 	// You can also control the environmental variables in a similar way, but
 	// note that CLI args take precedence over envvars, so set the corresponding
 	// CLI arg empty.
-	AuroraParameters  map[string]string
-	AuroraEnvironment map[string]string
+	AuroraWebParameters    map[string]string
+	AuroraIngestParameters map[string]string
+	AuroraEnvironment      map[string]string
 }
 
 type CaptiveConfig struct {
 	binaryPath string
 	configPath string
+	useDB      bool
 }
 
 type Test struct {
@@ -77,16 +79,18 @@ type Test struct {
 
 	composePath string
 
-	config        Config
-	coreConfig    CaptiveConfig
-	auroraConfig aurora.Config
-	environment   *EnvironmentManager
+	config              Config
+	coreConfig          CaptiveConfig
+	auroraIngestConfig aurora.Config
+	environment         *EnvironmentManager
 
-	auroraClient *sdk.Client
-	coreClient    *hcnetcore.Client
+	auroraClient      *sdk.Client
+	auroraAdminClient *sdk.AdminClient
+	coreClient         *hcnetcore.Client
 
-	app           *aurora.App
-	appStopped    chan struct{}
+	webNode       *aurora.App
+	ingestNode    *aurora.App
+	appStopped    *sync.WaitGroup
 	shutdownOnce  sync.Once
 	shutdownCalls []func()
 	masterKey     *keypair.Full
@@ -94,11 +98,17 @@ type Test struct {
 }
 
 func NewTestForRemoteAurora(t *testing.T, auroraURL string, passPhrase string, masterKey *keypair.Full) *Test {
+	adminClient, err := sdk.NewAdminClient(0, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	return &Test{
-		t:             t,
-		auroraClient: &sdk.Client{AuroraURL: auroraURL},
-		masterKey:     masterKey,
-		passPhrase:    passPhrase,
+		t:                  t,
+		auroraClient:      &sdk.Client{AuroraURL: auroraURL},
+		auroraAdminClient: adminClient,
+		masterKey:          masterKey,
+		passPhrase:         passPhrase,
 	}
 }
 
@@ -109,13 +119,19 @@ func NewTestForRemoteAurora(t *testing.T, auroraURL string, passPhrase string, m
 //
 // WARNING: This requires Docker Compose installed.
 func NewTest(t *testing.T, config Config) *Test {
-	if os.Getenv("HORIZON_INTEGRATION_TESTS") == "" {
-		t.Skip("skipping integration test: HORIZON_INTEGRATION_TESTS not set")
+	if os.Getenv("HORIZON_INTEGRATION_TESTS_ENABLED") == "" {
+		t.Skip("skipping integration test: HORIZON_INTEGRATION_TESTS_ENABLED not set")
 	}
 
-	// If not specific explicitly, set the protocol to the maximum supported version
 	if config.ProtocolVersion == 0 {
+		// Default to the maximum supported protocol version
 		config.ProtocolVersion = ingest.MaxSupportedProtocolVersion
+		// If the environment tells us that Core only supports up to certain version,
+		// use that.
+		maxSupportedCoreProtocolFromEnv := GetCoreMaxSupportedProtocol()
+		if maxSupportedCoreProtocolFromEnv != 0 && maxSupportedCoreProtocolFromEnv < ingest.MaxSupportedProtocolVersion {
+			config.ProtocolVersion = maxSupportedCoreProtocolFromEnv
+		}
 	}
 
 	composePath := findDockerComposePath()
@@ -151,17 +167,20 @@ func (i *Test) configureCaptiveCore() {
 	// custom Aurora parameters.
 	if RunWithCaptiveCore {
 		composePath := findDockerComposePath()
-		i.coreConfig.binaryPath = os.Getenv("CAPTIVE_CORE_BIN")
+		i.coreConfig.binaryPath = os.Getenv("HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN")
 		i.coreConfig.configPath = filepath.Join(composePath, "captive-core-integration-tests.cfg")
+		if RunWithCaptiveCoreUseDB {
+			i.coreConfig.useDB = true
+		}
 	}
 
-	if value := i.getParameter(
+	if value := i.getIngestParameter(
 		aurora.HcnetCoreBinaryPathName,
 		"HCNET_CORE_BINARY_PATH",
 	); value != "" {
 		i.coreConfig.binaryPath = value
 	}
-	if value := i.getParameter(
+	if value := i.getIngestParameter(
 		aurora.CaptiveCoreConfigPathName,
 		"CAPTIVE_CORE_CONFIG_PATH",
 	); value != "" {
@@ -169,11 +188,11 @@ func (i *Test) configureCaptiveCore() {
 	}
 }
 
-func (i *Test) getParameter(argName, envName string) string {
+func (i *Test) getIngestParameter(argName, envName string) string {
 	if value, ok := i.config.AuroraEnvironment[envName]; ok {
 		return value
 	}
-	if value, ok := i.config.AuroraParameters[argName]; ok {
+	if value, ok := i.config.AuroraIngestParameters[argName]; ok {
 		return value
 	}
 	return ""
@@ -185,13 +204,18 @@ func (i *Test) runComposeCommand(args ...string) {
 
 	cmdline := append([]string{"-f", integrationYaml}, args...)
 	cmd := exec.Command("docker-compose", cmdline...)
+	coreImageOverride := ""
 	if i.config.CoreDockerImage != "" {
+		coreImageOverride = i.config.CoreDockerImage
+	} else if img := os.Getenv("HORIZON_INTEGRATION_TESTS_DOCKER_IMG"); img != "" {
+		coreImageOverride = img
+	}
+	if coreImageOverride != "" {
 		cmd.Env = append(
 			os.Environ(),
-			fmt.Sprintf("CORE_IMAGE=%s", i.config.CoreDockerImage),
+			fmt.Sprintf("CORE_IMAGE=%s", coreImageOverride),
 		)
 	}
-
 	i.t.Log("Running", cmd.Env, cmd.Args)
 	out, innerErr := cmd.Output()
 	if exitErr, ok := innerErr.(*exec.ExitError); ok {
@@ -207,8 +231,11 @@ func (i *Test) runComposeCommand(args ...string) {
 func (i *Test) prepareShutdownHandlers() {
 	i.shutdownCalls = append(i.shutdownCalls,
 		func() {
-			if i.app != nil {
-				i.app.Close()
+			if i.webNode != nil {
+				i.webNode.Close()
+			}
+			if i.ingestNode != nil {
+				i.ingestNode.Close()
 			}
 			i.runComposeCommand("rm", "-fvs", "core")
 			i.runComposeCommand("rm", "-fvs", "core-postgres")
@@ -240,8 +267,8 @@ func (i *Test) RestartAurora() error {
 	return nil
 }
 
-func (i *Test) GetAuroraConfig() aurora.Config {
-	return i.auroraConfig
+func (i *Test) GetAuroraIngestConfig() aurora.Config {
+	return i.auroraIngestConfig
 }
 
 // Shutdown stops the integration tests and destroys all its associated
@@ -258,26 +285,36 @@ func (i *Test) Shutdown() {
 }
 
 func (i *Test) StartAurora() error {
-	auroraPostgresURL := i.config.PostgresURL
-	if auroraPostgresURL == "" {
-		postgres := dbtest.Postgres(i.t)
-		i.shutdownCalls = append(i.shutdownCalls, func() {
-			// FIXME: Unfortunately, Aurora leaves open sessions behind,
-			//        leading to a "database is being accessed by other users"
-			//        error when trying to drop it.
-			// postgres.Close()
-		})
-		auroraPostgresURL = postgres.DSN
-	}
+	postgres := dbtest.Postgres(i.t)
+	i.shutdownCalls = append(i.shutdownCalls, func() {
+		i.StopAurora()
+		postgres.Close()
+	})
 
-	config, configOpts := aurora.Flags()
-	cmd := &cobra.Command{
+	webConfig, webConfigOpts := aurora.Flags()
+	ingestConfig, ingestConfigOpts := aurora.Flags()
+	webCmd := &cobra.Command{
 		Use:   "aurora",
 		Short: "Client-facing API server for the Hcnet network",
 		Long:  "Client-facing API server for the Hcnet network.",
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			i.app, err = aurora.NewAppFromFlags(config, configOpts)
+			i.webNode, err = aurora.NewAppFromFlags(webConfig, webConfigOpts)
+			if err != nil {
+				// Explicitly exit here as that's how these tests are structured for now.
+				fmt.Println(err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	ingestCmd := &cobra.Command{
+		Use:   "aurora",
+		Short: "Ingest of Hcnet network",
+		Long:  "Ingest of Hcnet network.",
+		Run: func(cmd *cobra.Command, args []string) {
+			var err error
+			i.ingestNode, err = aurora.NewAppFromFlags(ingestConfig, ingestConfigOpts)
 			if err != nil {
 				// Explicitly exit here as that's how these tests are structured for now.
 				fmt.Println(err)
@@ -294,44 +331,58 @@ func (i *Test) StartAurora() error {
 	hostname := "localhost"
 	coreBinaryPath := i.coreConfig.binaryPath
 	captiveCoreConfigPath := i.coreConfig.configPath
+	captiveCoreUseDB := strconv.FormatBool(i.coreConfig.useDB)
 
 	defaultArgs := map[string]string{
-		"hcnet-core-url": i.coreClient.URL,
-		"hcnet-core-db-url": fmt.Sprintf(
-			"postgres://postgres:%s@%s:%d/hcnet?sslmode=disable",
-			hcnetCorePostgresPassword,
-			hostname,
-			hcnetCorePostgresPort,
-		),
-		"hcnet-core-binary-path":      coreBinaryPath,
-		"captive-core-config-path":      captiveCoreConfigPath,
-		"captive-core-http-port":        "21626",
-		"enable-captive-core-ingestion": strconv.FormatBool(len(coreBinaryPath) > 0),
-		"ingest":                        "true",
+		"ingest":                        "false",
 		"history-archive-urls":          fmt.Sprintf("http://%s:%d", hostname, historyArchivePort),
-		"db-url":                        auroraPostgresURL,
+		"db-url":                        postgres.RO_DSN,
+		"hcnet-core-url":              i.coreClient.URL,
 		"network-passphrase":            i.passPhrase,
 		"apply-migrations":              "true",
-		"admin-port":                    strconv.Itoa(i.AdminPort()),
+		"enable-captive-core-ingestion": "false",
 		"port":                          "8000",
 		// due to ARTIFICIALLY_ACCELERATE_TIME_FOR_TESTING
 		"checkpoint-frequency": "8",
-		"per-hour-rate-limit":  "0", // disable rate limiting
+		"per-hour-rate-limit":  "0",  // disable rate limiting
+		"max-db-connections":   "50", // the postgres container supports 100 connections, be conservative
 	}
 
-	merged := MergeMaps(defaultArgs, i.config.AuroraParameters)
-	args := mapToFlags(merged)
+	merged := MergeMaps(defaultArgs, i.config.AuroraWebParameters, map[string]string{"admin-port": "0"})
+	webArgs := mapToFlags(merged)
+	mergedIngest := MergeMaps(defaultArgs,
+		map[string]string{
+			"admin-port":                    strconv.Itoa(i.AdminPort()),
+			"port":                          "8001",
+			"enable-captive-core-ingestion": strconv.FormatBool(len(coreBinaryPath) > 0),
+			"db-url":                        postgres.DSN,
+			"hcnet-core-db-url": fmt.Sprintf(
+				"postgres://postgres:%s@%s:%d/hcnet?sslmode=disable",
+				hcnetCorePostgresPassword,
+				hostname,
+				hcnetCorePostgresPort,
+			),
+			"hcnet-core-binary-path":  coreBinaryPath,
+			"captive-core-config-path":  captiveCoreConfigPath,
+			"captive-core-http-port":    "21626",
+			"captive-core-use-db":       captiveCoreUseDB,
+			"captive-core-storage-path": os.TempDir(),
+			"ingest":                    "true"},
+		i.config.AuroraIngestParameters)
+	ingestArgs := mapToFlags(mergedIngest)
 
 	// initialize core arguments
-	i.t.Log("Aurora command line:", args)
+	i.t.Log("Aurora command line:", webArgs)
 	var env strings.Builder
 	for key, value := range i.config.AuroraEnvironment {
 		env.WriteString(fmt.Sprintf("%s=%s ", key, value))
 	}
 	i.t.Logf("Aurora environmental variables: %s\n", env.String())
 
+	webCmd.SetArgs(webArgs)
+	ingestCmd.SetArgs(ingestArgs)
+
 	// prepare env
-	cmd.SetArgs(args)
 	for key, value := range i.config.AuroraEnvironment {
 		innerErr := i.environment.Add(key, value)
 		if innerErr != nil {
@@ -341,33 +392,50 @@ func (i *Test) StartAurora() error {
 	}
 
 	var err error
-	if err = configOpts.Init(cmd); err != nil {
+	if err = webConfigOpts.Init(webCmd); err != nil {
+		return errors.Wrap(err, "cannot initialize params")
+	}
+	if err = ingestConfigOpts.Init(ingestCmd); err != nil {
 		return errors.Wrap(err, "cannot initialize params")
 	}
 
-	if err = cmd.Execute(); err != nil {
+	if err = ingestCmd.Execute(); err != nil {
+		return errors.Wrap(err, "cannot initialize Aurora")
+	}
+
+	if err = webCmd.Execute(); err != nil {
 		return errors.Wrap(err, "cannot initialize Aurora")
 	}
 
 	auroraPort := "8000"
-	if port, ok := merged["--port"]; ok {
+	if port, ok := merged["port"]; ok {
 		auroraPort = port
 	}
-	i.auroraConfig = *config
+	adminPort := uint16(i.AdminPort())
+	if port, ok := mergedIngest["admin-port"]; ok {
+		if cmdAdminPort, parseErr := strconv.ParseInt(port, 0, 16); parseErr == nil {
+			adminPort = uint16(cmdAdminPort)
+		}
+	}
+	i.auroraIngestConfig = *ingestConfig
 	i.auroraClient = &sdk.Client{
 		AuroraURL: fmt.Sprintf("http://%s:%s", hostname, auroraPort),
 	}
-
-	if err = i.app.Ingestion().BuildGenesisState(); err != nil {
-		return errors.Wrap(err, "cannot build genesis state")
+	i.auroraAdminClient, err = sdk.NewAdminClient(adminPort, "", 0)
+	if err != nil {
+		return errors.Wrap(err, "cannot initialize Aurora admin client")
 	}
 
-	done := make(chan struct{})
+	i.appStopped = &sync.WaitGroup{}
+	i.appStopped.Add(2)
 	go func() {
-		i.app.Serve()
-		close(done)
+		i.ingestNode.Serve()
+		i.appStopped.Done()
 	}()
-	i.appStopped = done
+	go func() {
+		i.webNode.Serve()
+		i.appStopped.Done()
+	}()
 
 	return nil
 }
@@ -451,7 +519,8 @@ func (i *Test) WaitForAurora() {
 		}
 
 		if uint32(root.CurrentProtocolVersion) == i.config.ProtocolVersion {
-			i.t.Logf("Aurora protocol version matches... %v", root)
+			i.t.Logf("Aurora protocol version matches %d: %+v",
+				root.CurrentProtocolVersion, root)
 			return
 		}
 	}
@@ -464,20 +533,34 @@ func (i *Test) Client() *sdk.Client {
 	return i.auroraClient
 }
 
+// Client returns aurora.Client connected to started Aurora instance.
+func (i *Test) AdminClient() *sdk.AdminClient {
+	return i.auroraAdminClient
+}
+
 // Aurora returns the aurora.App instance for the current integration test
-func (i *Test) Aurora() *aurora.App {
-	return i.app
+func (i *Test) AuroraWeb() *aurora.App {
+	return i.webNode
+}
+
+func (i *Test) AuroraIngest() *aurora.App {
+	return i.ingestNode
 }
 
 // StopAurora shuts down the running Aurora process
 func (i *Test) StopAurora() {
-	i.app.CloseDB()
-	i.app.Close()
+	if i.webNode != nil {
+		i.webNode.Close()
+	}
+	if i.ingestNode != nil {
+		i.ingestNode.Close()
+	}
 
 	// Wait for Aurora to shut down completely.
-	<-i.appStopped
+	i.appStopped.Wait()
 
-	i.app = nil
+	i.webNode = nil
+	i.ingestNode = nil
 }
 
 // AdminPort returns Aurora admin port.
@@ -499,11 +582,12 @@ func (i *Test) Master() *keypair.Full {
 }
 
 func (i *Test) MasterAccount() txnbuild.Account {
-	master, client := i.Master(), i.Client()
-	request := sdk.AccountRequest{AccountID: master.Address()}
-	account, err := client.AccountDetail(request)
-	panicIf(err)
+	account := i.MasterAccountDetails()
 	return &account
+}
+
+func (i *Test) MasterAccountDetails() proto.Account {
+	return i.MustGetAccount(i.Master())
 }
 
 func (i *Test) CurrentTest() *testing.T {
@@ -531,17 +615,13 @@ func (i *Test) CreateAccounts(count int, initialBalance string) ([]*keypair.Full
 	// Two paths here: either caller already did some stuff with the master
 	// account so we should retrieve the sequence number, or caller hasn't and
 	// we start from scratch.
-	seq := int64(0)
 	request := sdk.AccountRequest{AccountID: master.Address()}
 	account, err := client.AccountDetail(request)
-	if err == nil {
-		seq, err = strconv.ParseInt(account.Sequence, 10, 64) // str -> bigint
-		panicIf(err)
-	}
+	panicIf(err)
 
 	masterAccount := txnbuild.SimpleAccount{
 		AccountID: master.Address(),
-		Sequence:  seq,
+		Sequence:  account.Sequence,
 	}
 
 	for i := 0; i < count; i++ {
@@ -666,7 +746,7 @@ func (i *Test) SubmitOperations(
 func (i *Test) SubmitMultiSigOperations(
 	source txnbuild.Account, signers []*keypair.Full, ops ...txnbuild.Operation,
 ) (proto.Transaction, error) {
-	tx, err := i.CreateSignedTransaction(source, signers, ops...)
+	tx, err := i.CreateSignedTransactionFromOps(source, signers, ops...)
 	if err != nil {
 		return proto.Transaction{}, err
 	}
@@ -681,17 +761,39 @@ func (i *Test) MustSubmitMultiSigOperations(
 	return tx
 }
 
-func (i *Test) CreateSignedTransaction(
-	source txnbuild.Account, signers []*keypair.Full, ops ...txnbuild.Operation,
-) (*txnbuild.Transaction, error) {
-	txParams := txnbuild.TransactionParams{
-		SourceAccount:        source,
-		Operations:           ops,
-		BaseFee:              txnbuild.MinBaseFee,
-		Timebounds:           txnbuild.NewInfiniteTimeout(),
-		IncrementSequenceNum: true,
-	}
+func (i *Test) MustSubmitTransaction(signer *keypair.Full, txParams txnbuild.TransactionParams,
+) proto.Transaction {
+	tx, err := i.SubmitTransaction(signer, txParams)
+	panicIf(err)
+	return tx
+}
 
+func (i *Test) SubmitTransaction(
+	signer *keypair.Full, txParams txnbuild.TransactionParams,
+) (proto.Transaction, error) {
+	return i.SubmitMultiSigTransaction([]*keypair.Full{signer}, txParams)
+}
+
+func (i *Test) SubmitMultiSigTransaction(
+	signers []*keypair.Full, txParams txnbuild.TransactionParams,
+) (proto.Transaction, error) {
+	tx, err := i.CreateSignedTransaction(signers, txParams)
+	if err != nil {
+		return proto.Transaction{}, err
+	}
+	return i.Client().SubmitTransaction(tx)
+}
+
+func (i *Test) MustSubmitMultiSigTransaction(
+	signers []*keypair.Full, txParams txnbuild.TransactionParams,
+) proto.Transaction {
+	tx, err := i.SubmitMultiSigTransaction(signers, txParams)
+	panicIf(err)
+	return tx
+}
+
+func (i *Test) CreateSignedTransaction(signers []*keypair.Full, txParams txnbuild.TransactionParams,
+) (*txnbuild.Transaction, error) {
 	tx, err := txnbuild.NewTransaction(txParams)
 	if err != nil {
 		return nil, err
@@ -705,6 +807,20 @@ func (i *Test) CreateSignedTransaction(
 	}
 
 	return tx, nil
+}
+
+func (i *Test) CreateSignedTransactionFromOps(
+	source txnbuild.Account, signers []*keypair.Full, ops ...txnbuild.Operation,
+) (*txnbuild.Transaction, error) {
+	txParams := txnbuild.TransactionParams{
+		SourceAccount:        source,
+		Operations:           ops,
+		BaseFee:              txnbuild.MinBaseFee,
+		Preconditions:        txnbuild.Preconditions{TimeBounds: txnbuild.NewInfiniteTimeout()},
+		IncrementSequenceNum: true,
+	}
+
+	return i.CreateSignedTransaction(signers, txParams)
 }
 
 func (i *Test) GetCurrentCoreLedgerSequence() (int, error) {
@@ -732,7 +848,7 @@ func (i *Test) LogFailedTx(txResponse proto.Transaction, auroraResult error) {
 	err := xdr.SafeUnmarshalBase64(txResponse.ResultXdr, &txResult)
 	assert.NoErrorf(t, err, "Unmarshalling transaction failed.")
 	assert.Equalf(t, xdr.TransactionResultCodeTxSuccess, txResult.Result.Code,
-		"Transaction doesn't have success code.")
+		"Transaction did not succeed: %d", txResult.Result.Code)
 }
 
 func (i *Test) GetPassPhrase() string {
@@ -819,4 +935,20 @@ func mapToFlags(params map[string]string) []string {
 		args = append(args, fmt.Sprintf("--%s=%s", key, value))
 	}
 	return args
+}
+
+func GetCoreMaxSupportedProtocol() uint32 {
+	str := os.Getenv("HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL")
+	if str == "" {
+		return 0
+	}
+	version, err := strconv.ParseUint(str, 10, 32)
+	if err != nil {
+		return 0
+	}
+	return uint32(version)
+}
+
+func (i *Test) GetEffectiveProtocolVersion() uint32 {
+	return i.config.ProtocolVersion
 }

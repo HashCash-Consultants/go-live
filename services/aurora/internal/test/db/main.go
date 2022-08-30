@@ -8,56 +8,69 @@ import (
 	"log"
 	"testing"
 
-	"github.com/jmoiron/sqlx"
 	// pq enables postgres support
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	db "github.com/hcnet/go/support/db/dbtest"
 )
 
 var (
-	coreDB     *sqlx.DB
-	coreUrl    *string
-	auroraDB  *sqlx.DB
-	auroraUrl *string
+	auroraDB     *db.DB
+	coreDB        *db.DB
+	coreDBConn    *sqlx.DB
+	auroraDBConn *sqlx.DB
 )
 
-// Aurora returns a connection to the aurora test database
-func Aurora(t *testing.T) *sqlx.DB {
+func auroraPostgres(t *testing.T) *db.DB {
 	if auroraDB != nil {
 		return auroraDB
 	}
-	postgres := db.Postgres(t)
-	auroraUrl = &postgres.DSN
-	auroraDB = postgres.Open()
-
+	auroraDB = db.Postgres(t)
 	return auroraDB
 }
 
-// AuroraURL returns the database connection the url any test
-// use when connecting to the history/aurora database
-func AuroraURL() string {
-	if auroraUrl == nil {
-		log.Panic(fmt.Errorf("Aurora not initialized"))
-	}
-	return *auroraUrl
-}
-
-// HcnetCore returns a connection to the hcnet core test database
-func HcnetCore(t *testing.T) *sqlx.DB {
+func corePostgres(t *testing.T) *db.DB {
 	if coreDB != nil {
 		return coreDB
 	}
-	postgres := db.Postgres(t)
-	coreUrl = &postgres.DSN
-	coreDB = postgres.Open()
+	coreDB = db.Postgres(t)
 	return coreDB
 }
 
-// HcnetCoreURL returns the database connection the url any test
-// use when connecting to the hcnet-core database
+func Aurora(t *testing.T) *sqlx.DB {
+	if auroraDBConn != nil {
+		return auroraDBConn
+	}
+
+	auroraDBConn = auroraPostgres(t).Open()
+	return auroraDBConn
+}
+
+func AuroraURL() string {
+	if auroraDB == nil {
+		log.Panic(fmt.Errorf("Aurora not initialized"))
+	}
+	return auroraDB.DSN
+}
+
+func AuroraROURL() string {
+	if auroraDB == nil {
+		log.Panic(fmt.Errorf("Aurora not initialized"))
+	}
+	return auroraDB.RO_DSN
+}
+
+func HcnetCore(t *testing.T) *sqlx.DB {
+	if coreDBConn != nil {
+		return coreDBConn
+	}
+	coreDBConn = corePostgres(t).Open()
+	return coreDBConn
+}
+
 func HcnetCoreURL() string {
-	if coreUrl == nil {
+	if coreDB == nil {
 		log.Panic(fmt.Errorf("HcnetCore not initialized"))
 	}
-	return *coreUrl
+	return coreDB.DSN
 }

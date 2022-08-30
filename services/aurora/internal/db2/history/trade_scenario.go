@@ -8,7 +8,7 @@ import (
 	"github.com/guregu/null"
 
 	"github.com/hcnet/go/services/aurora/internal/test"
-	"github.com/hcnet/go/services/aurora/internal/toid"
+	"github.com/hcnet/go/toid"
 	"github.com/hcnet/go/xdr"
 )
 
@@ -70,6 +70,7 @@ func createInsertTrades(
 		PriceN:              675,
 		PriceD:              981,
 		Type:                LiquidityPoolTradeType,
+		RoundingSlippage:    null.IntFrom(0),
 	}
 
 	fifth := InsertTrade{
@@ -87,6 +88,7 @@ func createInsertTrades(
 		PriceN:              43,
 		PriceD:              56,
 		Type:                LiquidityPoolTradeType,
+		RoundingSlippage:    null.IntFrom(0),
 	}
 
 	return []InsertTrade{

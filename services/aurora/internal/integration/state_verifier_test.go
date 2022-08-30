@@ -120,7 +120,7 @@ func TestStateVerifier(t *testing.T) {
 	}
 
 	// Trigger state rebuild to check if ingesting from history archive works
-	session := itest.Aurora().HistoryQ().Clone()
+	session := itest.AuroraIngest().HistoryQ().Clone()
 	q := &history.Q{session}
 	err = q.Begin()
 	assert.NoError(t, err)

@@ -2,6 +2,7 @@ package processors
 
 import (
 	"context"
+
 	"github.com/hcnet/go/ingest"
 	"github.com/hcnet/go/services/aurora/internal/db2/history"
 	"github.com/hcnet/go/support/errors"
@@ -11,6 +12,14 @@ type TransactionProcessor struct {
 	transactionsQ history.QTransactions
 	sequence      uint32
 	batch         history.TransactionBatchInsertBuilder
+}
+
+func NewTransactionFilteredTmpProcessor(transactionsQ history.QTransactions, sequence uint32) *TransactionProcessor {
+	return &TransactionProcessor{
+		transactionsQ: transactionsQ,
+		sequence:      sequence,
+		batch:         transactionsQ.NewTransactionFilteredTmpBatchInsertBuilder(maxBatchSize),
+	}
 }
 
 func NewTransactionProcessor(transactionsQ history.QTransactions, sequence uint32) *TransactionProcessor {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/hcnet/go/protocols/aurora"
 	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
+	"github.com/hcnet/go/services/aurora/internal/ingest"
 	"github.com/hcnet/go/services/aurora/internal/ledger"
 	"github.com/hcnet/go/support/render/hal"
 )
@@ -31,6 +32,7 @@ func PopulateRoot(
 	dest.HcnetCoreVersion = cVersion
 	dest.NetworkPassphrase = passphrase
 	dest.CurrentProtocolVersion = currentProtocolVersion
+	dest.SupportedProtocolVersion = ingest.MaxSupportedProtocolVersion
 	dest.CoreSupportedProtocolVersion = coreSupportedProtocolVersion
 
 	lb := hal.LinkBuilder{Base: auroraContext.BaseURL(ctx)}

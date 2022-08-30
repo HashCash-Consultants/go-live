@@ -11,8 +11,8 @@ import (
 	"github.com/hcnet/go/ingest"
 	"github.com/hcnet/go/protocols/aurora/base"
 	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/toid"
 	"github.com/hcnet/go/support/errors"
+	"github.com/hcnet/go/toid"
 	"github.com/hcnet/go/xdr"
 )
 

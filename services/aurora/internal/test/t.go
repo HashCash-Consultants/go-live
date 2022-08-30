@@ -12,6 +12,7 @@ import (
 	"github.com/hcnet/go/services/aurora/internal/db2/schema"
 	"github.com/hcnet/go/services/aurora/internal/ledger"
 	"github.com/hcnet/go/services/aurora/internal/operationfeestats"
+	tdb "github.com/hcnet/go/services/aurora/internal/test/db"
 	"github.com/hcnet/go/services/aurora/internal/test/scenarios"
 	"github.com/hcnet/go/support/db"
 	"github.com/hcnet/go/support/render/hal"
@@ -51,11 +52,11 @@ func (t *T) AuroraSession() *db.Session {
 func (t *T) loadScenario(scenarioName string, includeAurora bool) {
 	hcnetCorePath := scenarioName + "-core.sql"
 
-	scenarios.Load(HcnetCoreDatabaseURL(), hcnetCorePath)
+	scenarios.Load(tdb.HcnetCoreURL(), hcnetCorePath)
 
 	if includeAurora {
 		auroraPath := scenarioName + "-aurora.sql"
-		scenarios.Load(DatabaseURL(), auroraPath)
+		scenarios.Load(tdb.AuroraURL(), auroraPath)
 	}
 }
 

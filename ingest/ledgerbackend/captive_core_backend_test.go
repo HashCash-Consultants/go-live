@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/hcnet/go/historyarchive"
 	"github.com/hcnet/go/network"
@@ -131,6 +133,10 @@ type testLedgerHeader struct {
 }
 
 func TestCaptiveNew(t *testing.T) {
+	storagePath, err := os.MkdirTemp("", "captive-core-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(storagePath)
+
 	executablePath := "/etc/hcnet-core"
 	networkPassphrase := network.PublicNetworkPassphrase
 	historyURLs := []string{"http://history.hcnet.org/prd/core-live/core_live_001"}
@@ -140,6 +146,7 @@ func TestCaptiveNew(t *testing.T) {
 			BinaryPath:         executablePath,
 			NetworkPassphrase:  networkPassphrase,
 			HistoryArchiveURLs: historyURLs,
+			StoragePath:        storagePath,
 		},
 	)
 
@@ -176,8 +183,8 @@ func TestCaptivePrepareRange(t *testing.T) {
 	cancelCalled := false
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 		cancel: context.CancelFunc(func() {
@@ -215,8 +222,8 @@ func TestCaptivePrepareRangeCrash(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -254,8 +261,8 @@ func TestCaptivePrepareRangeTerminated(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -277,9 +284,12 @@ func TestCaptivePrepareRangeCloseNotFullyTerminated(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	mockRunner := &hcnetCoreRunnerMock{}
-	mockRunner.On("catchup", uint32(100), uint32(200)).Return(nil).Once()
+	mockRunner.On("catchup", uint32(100), uint32(200)).Return(nil).Twice()
 	mockRunner.On("getMetaPipe").Return((<-chan metaResult)(metaChan))
 	mockRunner.On("context").Return(ctx)
+	mockRunner.On("close").Return(nil)
+	mockRunner.On("getProcessExitError").Return(true, nil)
+	mockRunner.On("getProcessExitError").Return(false, nil)
 
 	mockArchive := &historyarchive.MockArchive{}
 	mockArchive.
@@ -290,8 +300,8 @@ func TestCaptivePrepareRangeCloseNotFullyTerminated(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -313,6 +323,8 @@ func TestCaptivePrepareRange_ErrClosingSession(t *testing.T) {
 	ctx := context.Background()
 	mockRunner := &hcnetCoreRunnerMock{}
 	mockRunner.On("close").Return(fmt.Errorf("transient error"))
+	mockRunner.On("getProcessExitError").Return(false, nil)
+	mockRunner.On("context").Return(ctx)
 
 	captiveBackend := CaptiveHcnetCore{
 		nextLedger:        300,
@@ -381,8 +393,8 @@ func TestCaptivePrepareRange_ToIsAheadOfRootHAS(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -410,8 +422,8 @@ func TestCaptivePrepareRange_ErrCatchup(t *testing.T) {
 	cancelCalled := false
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		cancel: context.CancelFunc(func() {
 			cancelCalled = true
@@ -449,8 +461,8 @@ func TestCaptivePrepareRangeUnboundedRange_ErrRunFrom(t *testing.T) {
 	cancelCalled := false
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 		cancel: context.CancelFunc(func() {
@@ -486,6 +498,7 @@ func TestCaptivePrepareRangeUnboundedRange_ReuseSession(t *testing.T) {
 	mockRunner.On("runFrom", uint32(64), "0000000000000000000000000000000000000000000000000000000000000000").Return(nil).Once()
 	mockRunner.On("getMetaPipe").Return((<-chan metaResult)(metaChan))
 	mockRunner.On("context").Return(ctx)
+	mockRunner.On("getProcessExitError").Return(false, nil)
 
 	mockArchive := &historyarchive.MockArchive{}
 	mockArchive.
@@ -493,14 +506,15 @@ func TestCaptivePrepareRangeUnboundedRange_ReuseSession(t *testing.T) {
 		Return(historyarchive.HistoryArchiveState{
 			CurrentLedger: uint32(129),
 		}, nil)
+
 	mockArchive.
 		On("GetLedgerHeader", uint32(65)).
 		Return(xdr.LedgerHeaderHistoryEntry{}, nil)
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -547,8 +561,8 @@ func TestGetLatestLedgerSequence(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -581,6 +595,7 @@ func TestCaptiveGetLedger(t *testing.T) {
 	mockRunner.On("catchup", uint32(65), uint32(66)).Return(nil)
 	mockRunner.On("getMetaPipe").Return((<-chan metaResult)(metaChan))
 	mockRunner.On("context").Return(ctx)
+	mockRunner.On("getProcessExitError").Return(false, nil)
 
 	mockArchive := &historyarchive.MockArchive{}
 	mockArchive.
@@ -591,8 +606,8 @@ func TestCaptiveGetLedger(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -603,12 +618,12 @@ func TestCaptiveGetLedger(t *testing.T) {
 
 	ledgerRange := BoundedRange(65, 66)
 	tt.False(captiveBackend.isPrepared(ledgerRange), "core is not prepared until explicitly prepared")
-	tt.False(captiveBackend.isClosed())
+	tt.False(captiveBackend.closed)
 	err = captiveBackend.PrepareRange(ctx, ledgerRange)
 	assert.NoError(t, err)
 
 	tt.True(captiveBackend.isPrepared(ledgerRange))
-	tt.False(captiveBackend.isClosed())
+	tt.False(captiveBackend.closed)
 
 	_, err = captiveBackend.GetLedger(ctx, 64)
 	tt.Error(err, "requested ledger 64 is behind the captive core stream (expected=66)")
@@ -634,12 +649,12 @@ func TestCaptiveGetLedger(t *testing.T) {
 	tt.NoError(err)
 
 	tt.False(captiveBackend.isPrepared(ledgerRange))
-	tt.False(captiveBackend.isClosed())
+	tt.False(captiveBackend.closed)
 	_, err = captiveBackend.GetLedger(ctx, 66)
 	tt.NoError(err)
 
 	// core is not closed unless it's explicitly closed
-	tt.False(captiveBackend.isClosed())
+	tt.False(captiveBackend.closed)
 
 	mockArchive.AssertExpectations(t)
 	mockRunner.AssertExpectations(t)
@@ -689,8 +704,8 @@ func TestCaptiveGetLedgerCacheLatestLedger(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -744,8 +759,8 @@ func TestCaptiveGetLedger_NextLedgerIsDifferentToLedgerFromBuffer(t *testing.T) 
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -794,8 +809,8 @@ func TestCaptiveGetLedger_NextLedger0RangeFromIsSmallerThanLedgerFromBuffer(t *t
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -813,6 +828,10 @@ func TestCaptiveGetLedger_NextLedger0RangeFromIsSmallerThanLedgerFromBuffer(t *t
 }
 
 func TestCaptiveHcnetCore_PrepareRangeAfterClose(t *testing.T) {
+	storagePath, err := os.MkdirTemp("", "captive-core-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(storagePath)
+
 	ctx := context.Background()
 	executablePath := "/etc/hcnet-core"
 	networkPassphrase := network.PublicNetworkPassphrase
@@ -827,6 +846,7 @@ func TestCaptiveHcnetCore_PrepareRangeAfterClose(t *testing.T) {
 			NetworkPassphrase:  networkPassphrase,
 			HistoryArchiveURLs: historyURLs,
 			Toml:               captiveCoreToml,
+			StoragePath:        storagePath,
 		},
 	)
 	assert.NoError(t, err)
@@ -890,8 +910,8 @@ func TestCaptiveGetLedger_ErrReadingMetaResult(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -903,14 +923,14 @@ func TestCaptiveGetLedger_ErrReadingMetaResult(t *testing.T) {
 	tt.NoError(err)
 	tt.Equal(xdr.Uint32(65), meta.V0.LedgerHeader.Header.LedgerSeq)
 
-	tt.False(captiveBackend.isClosed())
+	tt.False(captiveBackend.closed)
 
 	// try reading from an empty buffer
 	_, err = captiveBackend.GetLedger(ctx, 66)
 	tt.EqualError(err, "unmarshalling error")
 
 	// not closed even if there is an error getting ledger
-	tt.False(captiveBackend.isClosed())
+	tt.False(captiveBackend.closed)
 
 	mockArchive.AssertExpectations(t)
 	mockRunner.AssertExpectations(t)
@@ -943,8 +963,8 @@ func TestCaptiveGetLedger_ErrClosingAfterLastLedger(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -985,8 +1005,8 @@ func TestCaptiveAfterClose(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 		cancel:            cancel,
@@ -997,7 +1017,7 @@ func TestCaptiveAfterClose(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.NoError(t, captiveBackend.Close())
-	assert.True(t, captiveBackend.isClosed())
+	assert.True(t, captiveBackend.closed)
 
 	_, err = captiveBackend.GetLedger(ctx, boundedRange.to)
 	assert.EqualError(t, err, "hcnet-core is no longer usable")
@@ -1039,8 +1059,8 @@ func TestGetLedgerBoundsCheck(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
@@ -1141,8 +1161,8 @@ func TestCaptiveGetLedgerTerminatedUnexpectedly(t *testing.T) {
 
 			captiveBackend := CaptiveHcnetCore{
 				archive: mockArchive,
-				hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-					return mockRunner, nil
+				hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+					return mockRunner
 				},
 				checkpointManager: historyarchive.NewCheckpointManager(64),
 			}
@@ -1284,6 +1304,7 @@ func TestCaptiveRunFromParams(t *testing.T) {
 func TestCaptiveIsPrepared(t *testing.T) {
 	mockRunner := &hcnetCoreRunnerMock{}
 	mockRunner.On("context").Return(context.Background()).Maybe()
+	mockRunner.On("getProcessExitError").Return(false, nil)
 
 	// c.prepared == nil
 	captiveBackend := CaptiveHcnetCore{
@@ -1338,6 +1359,31 @@ func TestCaptiveIsPrepared(t *testing.T) {
 			assert.Equal(t, tc.result, result)
 		})
 	}
+}
+
+// TestCaptiveIsPreparedCoreContextCancelled checks if IsPrepared returns false
+// if the hcnetCoreRunner.context() is cancelled. This can happen when
+// hcnetCoreRunner was closed, ex. when binary file was updated.
+func TestCaptiveIsPreparedCoreContextCancelled(t *testing.T) {
+	mockRunner := &hcnetCoreRunnerMock{}
+	ctx, cancel := context.WithCancel(context.Background())
+	mockRunner.On("context").Return(ctx).Maybe()
+	mockRunner.On("getProcessExitError").Return(false, nil)
+
+	rang := UnboundedRange(100)
+	captiveBackend := CaptiveHcnetCore{
+		nextLedger:        100,
+		prepared:          &rang,
+		hcnetCoreRunner: mockRunner,
+	}
+
+	result := captiveBackend.isPrepared(UnboundedRange(100))
+	assert.True(t, result)
+
+	cancel()
+
+	result = captiveBackend.isPrepared(UnboundedRange(100))
+	assert.False(t, result)
 }
 
 // TestCaptivePreviousLedgerCheck checks if previousLedgerHash is set in PrepareRange
@@ -1398,8 +1444,8 @@ func TestCaptivePreviousLedgerCheck(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
-		hcnetCoreRunnerFactory: func(_ hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-			return mockRunner, nil
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
 		},
 		ledgerHashStore:   mockLedgerHashStore,
 		checkpointManager: historyarchive.NewCheckpointManager(64),
@@ -1419,5 +1465,4 @@ func TestCaptivePreviousLedgerCheck(t *testing.T) {
 
 	mockRunner.AssertExpectations(t)
 	mockArchive.AssertExpectations(t)
-	mockLedgerHashStore.AssertExpectations(t)
 }

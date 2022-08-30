@@ -95,4 +95,4 @@ Please read [Code of Conduct](https://github.com/hcnet/.github/blob/master/CODE_
 To submit improvements and fixes to this library, please see [CONTRIBUTING](../CONTRIBUTING.md).
 
 ## License
-This project is licensed under the Apache License - see the [LICENSE](../../LICENSE-APACHE.txt) file for details.
+This project is licensed under the Apache License - see the [LICENSE](../../LICENSE) file for details.

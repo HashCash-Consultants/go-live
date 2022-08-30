@@ -10,10 +10,10 @@ import (
 	"github.com/hcnet/go/services/aurora/internal/ledger"
 	"github.com/hcnet/go/services/aurora/internal/render/problem"
 	"github.com/hcnet/go/services/aurora/internal/resourceadapter"
-	"github.com/hcnet/go/services/aurora/internal/toid"
 	"github.com/hcnet/go/support/errors"
 	"github.com/hcnet/go/support/render/hal"
 	supportProblem "github.com/hcnet/go/support/render/problem"
+	"github.com/hcnet/go/toid"
 )
 
 // Joinable query struct for join query parameter

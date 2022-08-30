@@ -22,6 +22,7 @@ import (
 	"github.com/hcnet/go/services/aurora/internal/ledger"
 	hProblem "github.com/hcnet/go/services/aurora/internal/render/problem"
 	"github.com/hcnet/go/services/aurora/internal/test"
+	tdb "github.com/hcnet/go/services/aurora/internal/test/db"
 	"github.com/hcnet/go/support/db"
 	"github.com/hcnet/go/support/log"
 	"github.com/hcnet/go/xdr"
@@ -52,7 +53,7 @@ func (suite *RateLimitMiddlewareTestSuite) SetupSuite() {
 }
 
 func (suite *RateLimitMiddlewareTestSuite) SetupTest() {
-	suite.c = NewTestConfig()
+	suite.c = NewTestConfig(tdb.AuroraURL())
 	suite.c.RateQuota = &throttled.RateQuota{
 		MaxRate:  throttled.PerHour(10),
 		MaxBurst: 9,

@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/guregu/null"
-	"github.com/hcnet/go/ingest/ledgerbackend"
 	"github.com/hcnet/go/services/aurora/internal/test"
-	"github.com/hcnet/go/services/aurora/internal/toid"
+	"github.com/hcnet/go/toid"
 	"github.com/hcnet/go/xdr"
 )
 
@@ -61,10 +60,11 @@ func TestInsertLedger(t *testing.T) {
 	test.ResetAuroraDB(t, tt.AuroraDB)
 	q := &Q{tt.AuroraSession()}
 
-	ledgerHashStore := ledgerbackend.NewAuroraDBLedgerHashStore(tt.AuroraSession())
-	_, exists, err := ledgerHashStore.GetLedgerHash(tt.Ctx, 100)
-	tt.Assert.NoError(err)
-	tt.Assert.False(exists)
+	var ledgerFromDB Ledger
+	var ledgerHeaderBase64 string
+	var err error
+	err = q.LedgerBySequence(tt.Ctx, &ledgerFromDB, 69859)
+	tt.Assert.Error(err)
 
 	expectedLedger := Ledger{
 		Sequence:                   69859,
@@ -115,7 +115,7 @@ func TestInsertLedger(t *testing.T) {
 			},
 		},
 	}
-	ledgerHeaderBase64, err := xdr.MarshalBase64(ledgerEntry.Header)
+	ledgerHeaderBase64, err = xdr.MarshalBase64(ledgerEntry.Header)
 	tt.Assert.NoError(err)
 	expectedLedger.LedgerHeaderXDR = null.NewString(ledgerHeaderBase64, true)
 
@@ -130,7 +130,6 @@ func TestInsertLedger(t *testing.T) {
 	tt.Assert.NoError(err)
 	tt.Assert.Equal(rowsAffected, int64(1))
 
-	var ledgerFromDB Ledger
 	err = q.LedgerBySequence(tt.Ctx, &ledgerFromDB, 69859)
 	tt.Assert.NoError(err)
 
@@ -145,11 +144,6 @@ func TestInsertLedger(t *testing.T) {
 	expectedLedger.ClosedAt = ledgerFromDB.ClosedAt
 
 	tt.Assert.Equal(expectedLedger, ledgerFromDB)
-
-	hash, exists, err := ledgerHashStore.GetLedgerHash(tt.Ctx, uint32(expectedLedger.Sequence))
-	tt.Assert.NoError(err)
-	tt.Assert.True(exists)
-	tt.Assert.Equal(expectedLedger.LedgerHash, hash)
 }
 
 func insertLedgerWithSequence(tt *test.T, q *Q, seq uint32) {

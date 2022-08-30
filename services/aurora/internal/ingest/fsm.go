@@ -10,9 +10,9 @@ import (
 
 	"github.com/hcnet/go/ingest"
 	"github.com/hcnet/go/ingest/ledgerbackend"
-	"github.com/hcnet/go/services/aurora/internal/toid"
 	"github.com/hcnet/go/support/errors"
 	logpkg "github.com/hcnet/go/support/log"
+	"github.com/hcnet/go/toid"
 	"github.com/hcnet/go/xdr"
 )
 
@@ -424,9 +424,10 @@ func (r resumeState) run(s *system) (transition, error) {
 			log.WithError(err).Warn("error updating hcnet-core cursor")
 		}
 
-		return retryResume(resumeState{
-			latestSuccessfullyProcessedLedger: lastIngestedLedger,
-		}), nil
+		s.maybeVerifyState(ingestLedger)
+
+		// resume immediately so Captive-Core catchup is not slowed down
+		return resumeImmediately(lastIngestedLedger), nil
 	}
 
 	ingestVersion, err := s.historyQ.GetIngestVersion(s.ctx)
@@ -474,7 +475,7 @@ func (r resumeState) run(s *system) (transition, error) {
 	}
 
 	rebuildStart := time.Now()
-	err = s.historyQ.RebuildTradeAggregationBuckets(s.ctx, ingestLedger, ingestLedger)
+	err = s.historyQ.RebuildTradeAggregationBuckets(s.ctx, ingestLedger, ingestLedger, s.config.RoundingSlippageFilter)
 	if err != nil {
 		return stop(), errors.Wrap(err, "error rebuilding trade aggregations")
 	}
@@ -522,6 +523,7 @@ func (r resumeState) run(s *system) (transition, error) {
 	localLog.Info("Processed ledger")
 
 	s.maybeVerifyState(ingestLedger)
+	s.maybeReapLookupTables(ingestLedger)
 
 	return resumeImmediately(ingestLedger), nil
 }
@@ -805,7 +807,7 @@ func (h reingestHistoryRangeState) run(s *system) (transition, error) {
 		}
 	}
 
-	err := s.historyQ.RebuildTradeAggregationBuckets(s.ctx, h.fromLedger, h.toLedger)
+	err := s.historyQ.RebuildTradeAggregationBuckets(s.ctx, h.fromLedger, h.toLedger, s.config.RoundingSlippageFilter)
 	if err != nil {
 		return stop(), errors.Wrap(err, "Error rebuilding trade aggregations")
 	}
@@ -958,7 +960,7 @@ func (v verifyRangeState) run(s *system) (transition, error) {
 			Info("Processed ledger")
 	}
 
-	err = s.historyQ.RebuildTradeAggregationBuckets(s.ctx, v.fromLedger, v.toLedger)
+	err = s.historyQ.RebuildTradeAggregationBuckets(s.ctx, v.fromLedger, v.toLedger, s.config.RoundingSlippageFilter)
 	if err != nil {
 		return stop(), errors.Wrap(err, "error rebuilding trade aggregations")
 	}

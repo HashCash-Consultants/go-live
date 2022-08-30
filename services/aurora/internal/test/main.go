@@ -41,21 +41,6 @@ func Context() context.Context {
 	return log.Set(context.Background(), testLogger)
 }
 
-// Database returns a connection to the aurora test database
-//
-// DEPRECATED:  use `Aurora()` from test/db package
-func Database(t *testing.T) *sqlx.DB {
-	return tdb.Aurora(t)
-}
-
-// DatabaseURL returns the database connection the url any test
-// use when connecting to the history/aurora database
-//
-// DEPRECATED:  use `AuroraURL()` from test/db package
-func DatabaseURL() string {
-	return tdb.AuroraURL()
-}
-
 // Start initializes a new test helper object, a new instance of log,
 // and conceptually "starts" a new test
 func Start(t *testing.T) *T {
@@ -64,26 +49,11 @@ func Start(t *testing.T) *T {
 	logger := log.New()
 
 	result.Ctx = log.Set(context.Background(), logger)
-	result.AuroraDB = Database(t)
-	result.CoreDB = HcnetCoreDatabase(t)
+	result.AuroraDB = tdb.Aurora(t)
+	result.CoreDB = tdb.HcnetCore(t)
 	result.Assert = assert.New(t)
 	result.Require = require.New(t)
 	result.EndLogTest = logger.StartTest(log.DebugLevel)
 
 	return result
-}
-
-// HcnetCoreDatabase returns a connection to the hcnet core test database
-//
-// DEPRECATED:  use `HcnetCore()` from test/db package
-func HcnetCoreDatabase(t *testing.T) *sqlx.DB {
-	return tdb.HcnetCore(t)
-}
-
-// HcnetCoreDatabaseURL returns the database connection the url any test
-// use when connecting to the hcnet-core database
-//
-// DEPRECATED:  use `HcnetCoreURL()` from test/db package
-func HcnetCoreDatabaseURL() string {
-	return tdb.HcnetCoreURL()
 }

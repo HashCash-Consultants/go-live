@@ -122,7 +122,7 @@ func (c *Client) sendHTTPRequest(req *http.Request, a interface{}) error {
 	if resp, err := c.HTTP.Do(req.WithContext(ctx)); err != nil {
 		return err
 	} else {
-		return decodeResponse(resp, &a, c)
+		return decodeResponse(resp, a, c.AuroraURL, c.clock)
 	}
 }
 
@@ -270,6 +270,9 @@ func (c *Client) setDefaultClient() {
 // fixAuroraURL strips all slashes(/) at the end of AuroraURL if any, then adds a single slash
 func (c *Client) fixAuroraURL() string {
 	c.fixAuroraURLOnce.Do(func() {
+		// TODO: we shouldn't happily edit data provided by the user,
+		//       better store it in an internal variable or, even better,
+		//       just parse it every time (what if the url changes during the life of the client?).
 		c.AuroraURL = strings.TrimRight(c.AuroraURL, "/") + "/"
 	})
 	return c.AuroraURL
@@ -653,10 +656,10 @@ func (c *Client) StreamOrderBooks(ctx context.Context, request OrderBookRequest,
 // It defaults to localtime when the server time is not available.
 // Note that this will generate your timebounds when you init the transaction, not when you build or submit
 // the transaction! So give yourself enough time to get the transaction built and signed before submitting.
-func (c *Client) FetchTimebounds(seconds int64) (txnbuild.Timebounds, error) {
+func (c *Client) FetchTimebounds(seconds int64) (txnbuild.TimeBounds, error) {
 	serverURL, err := url.Parse(c.AuroraURL)
 	if err != nil {
-		return txnbuild.Timebounds{}, errors.Wrap(err, "unable to parse aurora url")
+		return txnbuild.TimeBounds{}, errors.Wrap(err, "unable to parse aurora url")
 	}
 	currentTime := currentServerTime(serverURL.Hostname(), c.clock.Now().UTC().Unix())
 	if currentTime != 0 {

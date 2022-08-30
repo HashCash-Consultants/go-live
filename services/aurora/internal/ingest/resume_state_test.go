@@ -273,7 +273,7 @@ func (s *ResumeTestTestSuite) mockSuccessfulIngestion() {
 		).Once()
 	s.historyQ.On("UpdateLastLedgerIngest", s.ctx, uint32(101)).Return(nil).Once()
 	s.historyQ.On("Commit").Return(nil).Once()
-	s.historyQ.On("RebuildTradeAggregationBuckets", s.ctx, uint32(101), uint32(101)).Return(nil).Once()
+	s.historyQ.On("RebuildTradeAggregationBuckets", s.ctx, uint32(101), uint32(101), 0).Return(nil).Once()
 
 	s.hcnetCoreClient.On(
 		"SetCursor",
@@ -311,12 +311,15 @@ func (s *ResumeTestTestSuite) TestBumpIngestLedger() {
 		int32(101),
 	).Return(errors.New("my error")).Once()
 
+	// Skips state verification but ensures maybeVerifyState called
+	s.historyQ.On("GetExpStateInvalid", s.ctx).Return(true, nil).Once()
+
 	next, err := resumeState{latestSuccessfullyProcessedLedger: 99}.run(s.system)
 	s.Assert().NoError(err)
 	s.Assert().Equal(
 		transition{
 			node:          resumeState{latestSuccessfullyProcessedLedger: 101},
-			sleepDuration: defaultSleep,
+			sleepDuration: 0,
 		},
 		next,
 	)
@@ -362,7 +365,96 @@ func (s *ResumeTestTestSuite) TestErrorSettingCursorIgnored() {
 	).Return(errors.New("my error")).Once()
 
 	s.historyQ.On("GetExpStateInvalid", s.ctx).Return(false, nil).Once()
-	s.historyQ.On("RebuildTradeAggregationBuckets", s.ctx, uint32(101), uint32(101)).Return(nil).Once()
+	s.historyQ.On("RebuildTradeAggregationBuckets", s.ctx, uint32(101), uint32(101), 0).Return(nil).Once()
+
+	next, err := resumeState{latestSuccessfullyProcessedLedger: 100}.run(s.system)
+	s.Assert().NoError(err)
+	s.Assert().Equal(
+		transition{
+			node:          resumeState{latestSuccessfullyProcessedLedger: 101},
+			sleepDuration: 0,
+		},
+		next,
+	)
+}
+
+func (s *ResumeTestTestSuite) TestReapingObjectsDisabled() {
+	s.historyQ.On("Begin").Return(nil).Once()
+	s.historyQ.On("GetLastLedgerIngest", s.ctx).Return(uint32(100), nil).Once()
+	s.historyQ.On("GetIngestVersion", s.ctx).Return(CurrentVersion, nil).Once()
+	s.historyQ.On("GetLatestHistoryLedger", s.ctx).Return(uint32(100), nil)
+
+	s.runner.On("RunAllProcessorsOnLedger", mock.AnythingOfType("xdr.LedgerCloseMeta")).
+		Run(func(args mock.Arguments) {
+			meta := args.Get(0).(xdr.LedgerCloseMeta)
+			s.Assert().Equal(uint32(101), meta.LedgerSequence())
+		}).
+		Return(
+			ledgerStats{},
+			nil,
+		).Once()
+	s.historyQ.On("UpdateLastLedgerIngest", s.ctx, uint32(101)).Return(nil).Once()
+	s.historyQ.On("Commit").Return(nil).Once()
+
+	s.hcnetCoreClient.On(
+		"SetCursor",
+		mock.AnythingOfType("*context.timerCtx"),
+		defaultCoreCursorName,
+		int32(101),
+	).Return(nil).Once()
+
+	s.historyQ.On("GetExpStateInvalid", s.ctx).Return(false, nil).Once()
+	s.historyQ.On("RebuildTradeAggregationBuckets", s.ctx, uint32(101), uint32(101), 0).Return(nil).Once()
+	// Reap lookup tables not executed
+
+	next, err := resumeState{latestSuccessfullyProcessedLedger: 100}.run(s.system)
+	s.Assert().NoError(err)
+	s.Assert().Equal(
+		transition{
+			node:          resumeState{latestSuccessfullyProcessedLedger: 101},
+			sleepDuration: 0,
+		},
+		next,
+	)
+}
+
+func (s *ResumeTestTestSuite) TestErrorReapingObjectsIgnored() {
+	s.system.config.EnableReapLookupTables = true
+	defer func() {
+		s.system.config.EnableReapLookupTables = false
+	}()
+	s.historyQ.On("Begin").Return(nil).Once()
+	s.historyQ.On("GetLastLedgerIngest", s.ctx).Return(uint32(100), nil).Once()
+	s.historyQ.On("GetIngestVersion", s.ctx).Return(CurrentVersion, nil).Once()
+	s.historyQ.On("GetLatestHistoryLedger", s.ctx).Return(uint32(100), nil)
+
+	s.runner.On("RunAllProcessorsOnLedger", mock.AnythingOfType("xdr.LedgerCloseMeta")).
+		Run(func(args mock.Arguments) {
+			meta := args.Get(0).(xdr.LedgerCloseMeta)
+			s.Assert().Equal(uint32(101), meta.LedgerSequence())
+		}).
+		Return(
+			ledgerStats{},
+			nil,
+		).Once()
+	s.historyQ.On("UpdateLastLedgerIngest", s.ctx, uint32(101)).Return(nil).Once()
+	s.historyQ.On("Commit").Return(nil).Once()
+
+	s.hcnetCoreClient.On(
+		"SetCursor",
+		mock.AnythingOfType("*context.timerCtx"),
+		defaultCoreCursorName,
+		int32(101),
+	).Return(nil).Once()
+
+	s.historyQ.On("GetExpStateInvalid", s.ctx).Return(false, nil).Once()
+	s.historyQ.On("RebuildTradeAggregationBuckets", s.ctx, uint32(101), uint32(101), 0).Return(nil).Once()
+	// Reap lookup tables:
+	s.ledgerBackend.On("GetLatestLedgerSequence", s.ctx).Return(uint32(101), nil)
+	s.historyQ.On("Begin").Return(nil).Once()
+	s.historyQ.On("GetLastLedgerIngest", s.ctx).Return(uint32(100), nil).Once()
+	s.historyQ.On("ReapLookupTables", mock.AnythingOfType("*context.timerCtx"), mock.Anything).Return(nil, nil, errors.New("error reaping objects")).Once()
+	s.historyQ.On("Rollback").Return(nil).Once()
 
 	next, err := resumeState{latestSuccessfullyProcessedLedger: 100}.run(s.system)
 	s.Assert().NoError(err)

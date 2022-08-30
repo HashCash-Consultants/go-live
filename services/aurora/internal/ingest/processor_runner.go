@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/hcnet/go/ingest"
 	"github.com/hcnet/go/services/aurora/internal/db2/history"
+	"github.com/hcnet/go/services/aurora/internal/ingest/filters"
 	"github.com/hcnet/go/services/aurora/internal/ingest/processors"
 	"github.com/hcnet/go/support/errors"
 	"github.com/hcnet/go/xdr"
@@ -15,10 +17,11 @@ import (
 type ingestionSource int
 
 const (
-	_                    = iota
-	historyArchiveSource = ingestionSource(iota)
-	ledgerSource         = ingestionSource(iota)
-	logFrequency         = 50000
+	_                               = iota
+	historyArchiveSource            = ingestionSource(iota)
+	ledgerSource                    = ingestionSource(iota)
+	logFrequency                    = 50000
+	transactionsFilteredTmpGCPeriod = 5 * time.Minute
 )
 
 type auroraChangeProcessor interface {
@@ -82,10 +85,12 @@ var _ ProcessorRunnerInterface = (*ProcessorRunner)(nil)
 type ProcessorRunner struct {
 	config Config
 
-	ctx            context.Context
-	historyQ       history.IngestionQ
-	historyAdapter historyArchiveAdapterInterface
-	logMemoryStats bool
+	ctx                   context.Context
+	historyQ              history.IngestionQ
+	historyAdapter        historyArchiveAdapterInterface
+	logMemoryStats        bool
+	filters               filters.Filters
+	lastTransactionsTmpGC time.Time
 }
 
 func (s *ProcessorRunner) SetHistoryAdapter(historyAdapter historyArchiveAdapterInterface) {
@@ -145,6 +150,26 @@ func (s *ProcessorRunner) buildTransactionProcessor(
 		processors.NewClaimableBalancesTransactionProcessor(s.historyQ, sequence),
 		processors.NewLiquidityPoolsTransactionProcessor(s.historyQ, sequence),
 	})
+}
+
+func (s *ProcessorRunner) buildTransactionFilterer() *groupTransactionFilterers {
+	var f []processors.LedgerTransactionFilterer
+	if s.config.EnableIngestionFiltering {
+		f = append(f, s.filters.GetFilters(s.historyQ, s.ctx)...)
+	}
+
+	return newGroupTransactionFilterers(f)
+}
+
+func (s *ProcessorRunner) buildFilteredOutProcessor(ledger xdr.LedgerHeaderHistoryEntry) *groupTransactionProcessors {
+	// when in online mode, the submission result processor must always run (regardless of filtering)
+	var p []auroraTransactionProcessor
+	if s.config.EnableIngestionFiltering {
+		txSubProc := processors.NewTransactionFilteredTmpProcessor(s.historyQ, uint32(ledger.Header.LedgerSeq))
+		p = append(p, txSubProc)
+	}
+
+	return newGroupTransactionProcessors(p)
 }
 
 // checkIfProtocolVersionSupported checks if this Aurora version supports the
@@ -290,13 +315,31 @@ func (s *ProcessorRunner) RunTransactionProcessorsOnLedger(ledger xdr.LedgerClos
 		err = errors.Wrap(err, "Error while checking for supported protocol version")
 		return
 	}
-
+	header := transactionReader.GetHeader()
+	groupTransactionFilterers := s.buildTransactionFilterer()
+	groupFilteredOutProcessors := s.buildFilteredOutProcessor(header)
 	groupTransactionProcessors := s.buildTransactionProcessor(
-		&ledgerTransactionStats, &tradeProcessor, transactionReader.GetHeader())
-	err = processors.StreamLedgerTransactions(s.ctx, groupTransactionProcessors, transactionReader)
+		&ledgerTransactionStats, &tradeProcessor, header)
+	err = processors.StreamLedgerTransactions(s.ctx,
+		groupTransactionFilterers,
+		groupFilteredOutProcessors,
+		groupTransactionProcessors,
+		transactionReader,
+	)
 	if err != nil {
 		err = errors.Wrap(err, "Error streaming changes from ledger")
 		return
+	}
+
+	if s.config.EnableIngestionFiltering {
+		err = groupFilteredOutProcessors.Commit(s.ctx)
+		if err != nil {
+			err = errors.Wrap(err, "Error committing filtered changes from processor")
+			return
+		}
+		if time.Since(s.lastTransactionsTmpGC) > transactionsFilteredTmpGCPeriod {
+			s.historyQ.DeleteTransactionsFilteredTmpOlderThan(s.ctx, uint64(transactionsFilteredTmpGCPeriod.Seconds()))
+		}
 	}
 
 	err = groupTransactionProcessors.Commit(s.ctx)
@@ -306,7 +349,15 @@ func (s *ProcessorRunner) RunTransactionProcessorsOnLedger(ledger xdr.LedgerClos
 	}
 
 	transactionStats = ledgerTransactionStats.GetResults()
+	transactionStats.TransactionsFiltered = groupTransactionFilterers.droppedTransactions
 	transactionDurations = groupTransactionProcessors.processorsRunDurations
+	for key, duration := range groupFilteredOutProcessors.processorsRunDurations {
+		transactionDurations[key] = duration
+	}
+	for key, duration := range groupTransactionFilterers.processorsRunDurations {
+		transactionDurations[key] = duration
+	}
+
 	tradeStats = tradeProcessor.GetStats()
 	return
 }

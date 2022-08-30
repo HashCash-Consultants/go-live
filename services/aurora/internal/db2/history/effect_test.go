@@ -9,7 +9,7 @@ import (
 	"github.com/hcnet/go/protocols/aurora/effects"
 	"github.com/hcnet/go/services/aurora/internal/db2"
 	"github.com/hcnet/go/services/aurora/internal/test"
-	"github.com/hcnet/go/services/aurora/internal/toid"
+	"github.com/hcnet/go/toid"
 )
 
 func TestEffectsForLiquidityPool(t *testing.T) {

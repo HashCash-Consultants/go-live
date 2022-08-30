@@ -6,7 +6,7 @@ import (
 
 	"github.com/guregu/null"
 	"github.com/hcnet/go/services/aurora/internal/test"
-	"github.com/hcnet/go/services/aurora/internal/toid"
+	"github.com/hcnet/go/toid"
 )
 
 func TestAddEffect(t *testing.T) {

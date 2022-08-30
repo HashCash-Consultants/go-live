@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/toid"
+	"github.com/hcnet/go/toid"
 	"github.com/hcnet/go/xdr"
 )
 

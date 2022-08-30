@@ -8,21 +8,22 @@ import (
 
 	"github.com/hcnet/go/network"
 	"github.com/hcnet/go/services/aurora/internal/test"
+	tdb "github.com/hcnet/go/services/aurora/internal/test/db"
 	supportLog "github.com/hcnet/go/support/log"
 )
 
-func NewTestApp() *App {
-	app, err := NewApp(NewTestConfig())
+func NewTestApp(dsn string) *App {
+	app, err := NewApp(NewTestConfig(dsn))
 	if err != nil {
 		log.Fatal("cannot create app", err)
 	}
 	return app
 }
 
-func NewTestConfig() Config {
+func NewTestConfig(dsn string) Config {
 	return Config{
-		DatabaseURL:            test.DatabaseURL(),
-		HcnetCoreDatabaseURL: test.HcnetCoreDatabaseURL(),
+		DatabaseURL:            dsn,
+		HcnetCoreDatabaseURL: tdb.HcnetCoreURL(),
 		RateQuota: &throttled.RateQuota{
 			MaxRate:  throttled.PerHour(1000),
 			MaxBurst: 100,

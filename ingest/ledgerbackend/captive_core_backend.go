@@ -32,10 +32,10 @@ func (c *CaptiveHcnetCore) roundDownToFirstReplayAfterCheckpointStart(ledger uin
 // than DatabaseBackend but requires some extra init time.
 //
 // It operates in two modes:
-//   * When a BoundedRange is prepared it starts Hcnet-Core in catchup mode that
+//   - When a BoundedRange is prepared it starts Hcnet-Core in catchup mode that
 //     replays ledgers in memory. This is very fast but requires Hcnet-Core to
 //     keep ledger state in RAM. It requires around 3GB of RAM as of August 2020.
-//   * When a UnboundedRange is prepared it runs Hcnet-Core catchup mode to
+//   - When a UnboundedRange is prepared it runs Hcnet-Core catchup mode to
 //     sync with the first ledger and then runs it in a normal mode. This
 //     requires the configAppendPath to be provided because a quorum set needs to
 //     be selected.
@@ -52,9 +52,9 @@ func (c *CaptiveHcnetCore) roundDownToFirstReplayAfterCheckpointStart(ledger uin
 //
 // While using BoundedRanges is straightforward there are a few gotchas connected
 // to UnboundedRanges:
-//   * PrepareRange takes more time because all ledger entries must be stored on
+//   - PrepareRange takes more time because all ledger entries must be stored on
 //     disk instead of RAM.
-//   * If GetLedger is not called frequently (every 5 sec. on average) the
+//   - If GetLedger is not called frequently (every 5 sec. on average) the
 //     Hcnet-Core process can go out of sync with the network. This happens
 //     because there is no buffering of communication pipe and CaptiveHcnetCore
 //     has a very small internal buffer and Hcnet-Core will not close the new
@@ -83,7 +83,7 @@ type CaptiveHcnetCore struct {
 	hcnetCoreLock sync.RWMutex
 
 	// For testing
-	hcnetCoreRunnerFactory func(mode hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error)
+	hcnetCoreRunnerFactory func() hcnetCoreRunnerInterface
 
 	// cachedMeta keeps that ledger data of the last fetched ledger. Updated in GetLedger().
 	cachedMeta *xdr.LedgerCloseMeta
@@ -103,7 +103,9 @@ type CaptiveCoreConfig struct {
 	NetworkPassphrase string
 	// HistoryArchiveURLs are a list of history archive urls
 	HistoryArchiveURLs []string
-	Toml               *CaptiveCoreToml
+	// UserAgent is the value of `User-Agent` header that will be send along http archive requests.
+	UserAgent string
+	Toml      *CaptiveCoreToml
 
 	// Optional fields
 
@@ -124,6 +126,12 @@ type CaptiveCoreConfig struct {
 	// stored. We always append /captive-core to this directory, since we clean
 	// it up entirely on shutdown.
 	StoragePath string
+
+	// UseDB, when true, instructs the core invocation to use an external db url
+	// for ledger states rather than in memory(RAM). The external db url is determined by the presence
+	// of DATABASE parameter in the captive-core-config-path or if absent, the db will default to sqlite
+	// and the db file will be stored at location derived from StoragePath parameter.
+	UseDB bool
 }
 
 // NewCaptive returns a new CaptiveHcnetCore instance.
@@ -142,6 +150,7 @@ func NewCaptive(config CaptiveCoreConfig) (*CaptiveHcnetCore, error) {
 	if parentCtx == nil {
 		parentCtx = context.Background()
 	}
+
 	var cancel context.CancelFunc
 	config.Context, cancel = context.WithCancel(parentCtx)
 
@@ -166,8 +175,8 @@ func NewCaptive(config CaptiveCoreConfig) (*CaptiveHcnetCore, error) {
 		checkpointManager: historyarchive.NewCheckpointManager(config.CheckpointFrequency),
 	}
 
-	c.hcnetCoreRunnerFactory = func(mode hcnetCoreRunnerMode) (hcnetCoreRunnerInterface, error) {
-		return newHcnetCoreRunner(config, mode)
+	c.hcnetCoreRunnerFactory = func() hcnetCoreRunnerInterface {
+		return newHcnetCoreRunner(config)
 	}
 	return c, nil
 }
@@ -203,15 +212,7 @@ func (c *CaptiveHcnetCore) openOfflineReplaySubprocess(from, to uint32) error {
 		)
 	}
 
-	var runner hcnetCoreRunnerInterface
-	if runner, err = c.hcnetCoreRunnerFactory(hcnetCoreRunnerModeOffline); err != nil {
-		return errors.Wrap(err, "error creating hcnet-core runner")
-	} else {
-		// only assign c.hcnetCoreRunner if runner is not nil to avoid nil interface check
-		// see https://golang.org/doc/faq#nil_error
-		c.hcnetCoreRunner = runner
-	}
-
+	c.hcnetCoreRunner = c.hcnetCoreRunnerFactory()
 	err = c.hcnetCoreRunner.catchup(from, to)
 	if err != nil {
 		return errors.Wrap(err, "error running hcnet-core")
@@ -247,15 +248,7 @@ func (c *CaptiveHcnetCore) openOnlineReplaySubprocess(ctx context.Context, from 
 		)
 	}
 
-	var runner hcnetCoreRunnerInterface
-	if runner, err = c.hcnetCoreRunnerFactory(hcnetCoreRunnerModeOnline); err != nil {
-		return errors.Wrap(err, "error creating hcnet-core runner")
-	} else {
-		// only assign c.hcnetCoreRunner if runner is not nil to avoid nil interface check
-		// see https://golang.org/doc/faq#nil_error
-		c.hcnetCoreRunner = runner
-	}
-
+	c.hcnetCoreRunner = c.hcnetCoreRunnerFactory()
 	runFrom, ledgerHash, err := c.runFromParams(ctx, from)
 	if err != nil {
 		return errors.Wrap(err, "error calculating ledger and hash for hcnet-core run")
@@ -279,14 +272,15 @@ func (c *CaptiveHcnetCore) openOnlineReplaySubprocess(ctx context.Context, from 
 }
 
 // runFromParams receives a ledger sequence and calculates the required values to call hcnet-core run with --start-ledger and --start-hash
-func (c *CaptiveHcnetCore) runFromParams(ctx context.Context, from uint32) (runFrom uint32, ledgerHash string, err error) {
+func (c *CaptiveHcnetCore) runFromParams(ctx context.Context, from uint32) (uint32, string, error) {
+
 	if from == 1 {
 		// Trying to start-from 1 results in an error from Hcnet-Core:
 		// Target ledger 1 is not newer than last closed ledger 1 - nothing to do
 		// TODO maybe we can fix it by generating 1st ledger meta
 		// like GenesisLedgerStateReader?
-		err = errors.New("CaptiveCore is unable to start from ledger 1, start from ledger 2")
-		return
+		err := errors.New("CaptiveCore is unable to start from ledger 1, start from ledger 2")
+		return 0, "", err
 	}
 
 	if from <= 63 {
@@ -298,26 +292,25 @@ func (c *CaptiveHcnetCore) runFromParams(ctx context.Context, from uint32) (runF
 		from = 3
 	}
 
-	runFrom = from - 1
+	runFrom := from - 1
 	if c.ledgerHashStore != nil {
 		var exists bool
-		ledgerHash, exists, err = c.ledgerHashStore.GetLedgerHash(ctx, runFrom)
+		ledgerHash, exists, err := c.ledgerHashStore.GetLedgerHash(ctx, runFrom)
 		if err != nil {
 			err = errors.Wrapf(err, "error trying to read ledger hash %d", runFrom)
-			return
+			return 0, "", err
 		}
 		if exists {
-			return
+			return runFrom, ledgerHash, nil
 		}
 	}
 
-	ledgerHeader, err2 := c.archive.GetLedgerHeader(from)
-	if err2 != nil {
-		err = errors.Wrapf(err2, "error trying to read ledger header %d from HAS", from)
-		return
+	ledgerHeader, err := c.archive.GetLedgerHeader(from)
+	if err != nil {
+		return 0, "", errors.Wrapf(err, "error trying to read ledger header %d from HAS", from)
 	}
-	ledgerHash = hex.EncodeToString(ledgerHeader.Header.PreviousLedgerHash[:])
-	return
+	ledgerHash := hex.EncodeToString(ledgerHeader.Header.PreviousLedgerHash[:])
+	return runFrom, ledgerHash, nil
 }
 
 // nextExpectedSequence returns nextLedger (if currently set) or start of
@@ -369,9 +362,10 @@ func (c *CaptiveHcnetCore) startPreparingRange(ctx context.Context, ledgerRange 
 // Captive hcnet-core backend needs to initialize Hcnet-Core state to be
 // able to stream ledgers.
 // Hcnet-Core mode depends on the provided ledgerRange:
-//   * For BoundedRange it will start Hcnet-Core in catchup mode.
-//   * For UnboundedRange it will first catchup to starting ledger and then run
+//   - For BoundedRange it will start Hcnet-Core in catchup mode.
+//   - For UnboundedRange it will first catchup to starting ledger and then run
 //     it normally (including connecting to the Hcnet network).
+//
 // Please note that using a BoundedRange, currently, requires a full-trust on
 // history archive. This issue is being fixed in Hcnet-Core.
 func (c *CaptiveHcnetCore) PrepareRange(ctx context.Context, ledgerRange Range) error {
@@ -398,16 +392,18 @@ func (c *CaptiveHcnetCore) IsPrepared(ctx context.Context, ledgerRange Range) (b
 }
 
 func (c *CaptiveHcnetCore) isPrepared(ledgerRange Range) bool {
-	if c.isClosed() {
-		return false
-	}
-
-	if c.hcnetCoreRunner == nil {
-		return false
-	}
 	if c.closed {
 		return false
 	}
+
+	if c.hcnetCoreRunner == nil || c.hcnetCoreRunner.context().Err() != nil {
+		return false
+	}
+
+	if exited, _ := c.hcnetCoreRunner.getProcessExitError(); exited {
+		return false
+	}
+
 	lastLedger := uint32(0)
 	if c.lastLedger != nil {
 		lastLedger = *c.lastLedger
@@ -452,7 +448,7 @@ func (c *CaptiveHcnetCore) isPrepared(ledgerRange Range) bool {
 // is less than the last requested sequence number, an error will be returned.
 //
 // This function behaves differently for bounded and unbounded ranges:
-//   * BoundedRange: After getting the last ledger in a range this method will
+//   - BoundedRange: After getting the last ledger in a range this method will
 //     also Close() the backend.
 func (c *CaptiveHcnetCore) GetLedger(ctx context.Context, sequence uint32) (xdr.LedgerCloseMeta, error) {
 	c.hcnetCoreLock.RLock()
@@ -464,7 +460,7 @@ func (c *CaptiveHcnetCore) GetLedger(ctx context.Context, sequence uint32) (xdr.
 		return *c.cachedMeta, nil
 	}
 
-	if c.isClosed() {
+	if c.closed {
 		return xdr.LedgerCloseMeta{}, errors.New("hcnet-core is no longer usable")
 	}
 
@@ -607,7 +603,7 @@ func (c *CaptiveHcnetCore) GetLatestLedgerSequence(ctx context.Context) (uint32,
 	c.hcnetCoreLock.RLock()
 	defer c.hcnetCoreLock.RUnlock()
 
-	if c.isClosed() {
+	if c.closed {
 		return 0, errors.New("hcnet-core is no longer usable")
 	}
 	if c.prepared == nil {
@@ -624,10 +620,6 @@ func (c *CaptiveHcnetCore) GetLatestLedgerSequence(ctx context.Context) (uint32,
 		return c.nextExpectedSequence() - 1 + uint32(len(c.hcnetCoreRunner.getMetaPipe())), nil
 	}
 	return *c.lastLedger, nil
-}
-
-func (c *CaptiveHcnetCore) isClosed() bool {
-	return c.closed
 }
 
 // Close closes existing Hcnet-Core process, streaming sessions and removes all
