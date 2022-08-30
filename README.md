@@ -45,7 +45,7 @@ $ go version
 
 - mkdir github.com/hcnet in /go/src
 - go to /go/src/github.com/hcnet and execute following command:
-- git clone https://github.com/HashCash-Consultants/go.git
+-  git clone https://github.com/HashCash-Consultants/go.git --branch v2.20.0
 - go to /go/src/github.com/hcnet /go and execute following command:
 
 ```
