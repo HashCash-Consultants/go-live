@@ -8,7 +8,7 @@ To build aurora you must have go and dep in your ubuntu enivironment. To install
 - Download and upload the latest version of go lang tar file for ubuntu linux
 
 ```
-sudo tar -xvf go1.16.14.linux-amd64.tar.gz
+sudo tar -xvf go1.18.5.linux-amd64.tar.gz
 ```
 - Open vi .profile file
 ```
