@@ -1362,7 +1362,7 @@ func TestCaptiveIsPrepared(t *testing.T) {
 }
 
 // TestCaptiveIsPreparedCoreContextCancelled checks if IsPrepared returns false
-// if the hcnetCoreRunner.context() is cancelled. This can happen when
+// if the hcnetCoreRunner.context() is canceled. This can happen when
 // hcnetCoreRunner was closed, ex. when binary file was updated.
 func TestCaptiveIsPreparedCoreContextCancelled(t *testing.T) {
 	mockRunner := &hcnetCoreRunnerMock{}

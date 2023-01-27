@@ -529,6 +529,48 @@ func command(auroraConfig aurora.Config, args ...string) []string {
 	}, args...)
 }
 
+func TestMigrateIngestIsTrueByDefault(t *testing.T) {
+	tt := assert.New(t)
+	// Create a fresh Aurora database
+	newDB := dbtest.Postgres(t)
+	freshAuroraPostgresURL := newDB.DSN
+
+	auroracmd.RootCmd.SetArgs([]string{
+		// ingest is set to true by default
+		"--db-url", freshAuroraPostgresURL,
+		"db", "migrate", "up",
+	})
+	tt.NoError(auroracmd.RootCmd.Execute())
+
+	dbConn, err := db.Open("postgres", freshAuroraPostgresURL)
+	tt.NoError(err)
+
+	status, err := schema.Status(dbConn.DB.DB)
+	tt.NoError(err)
+	tt.NotContains(status, "1_initial_schema.sql\t\t\t\t\t\tno")
+}
+
+func TestMigrateChecksIngestFlag(t *testing.T) {
+	tt := assert.New(t)
+	// Create a fresh Aurora database
+	newDB := dbtest.Postgres(t)
+	freshAuroraPostgresURL := newDB.DSN
+
+	auroracmd.RootCmd.SetArgs([]string{
+		"--ingest=false",
+		"--db-url", freshAuroraPostgresURL,
+		"db", "migrate", "up",
+	})
+	tt.NoError(auroracmd.RootCmd.Execute())
+
+	dbConn, err := db.Open("postgres", freshAuroraPostgresURL)
+	tt.NoError(err)
+
+	status, err := schema.Status(dbConn.DB.DB)
+	tt.NoError(err)
+	tt.Contains(status, "1_initial_schema.sql\t\t\t\t\t\tno")
+}
+
 func TestFillGaps(t *testing.T) {
 	itest, reachedLedger := initializeDBIntegrationTest(t)
 	tt := assert.New(t)

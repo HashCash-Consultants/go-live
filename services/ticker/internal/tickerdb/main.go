@@ -67,7 +67,7 @@ type Issuer struct {
 
 // Trade represents an entry on the trades table
 type Trade struct {
-	ID              int32     `db:"id"`
+	ID              int64     `db:"id"`
 	AuroraID       string    `db:"aurora_id"`
 	LedgerCloseTime time.Time `db:"ledger_close_time"`
 	OfferID         string    `db:"offer_id"`
