@@ -142,41 +142,41 @@ commands:
           name: Check dependencies
           command: ./gomod.sh
 
-  # install_hcnet_core installs the latest unstable version of hcnet core.
-  install_hcnet_core:
+  # install_HashCash-Consultants_core installs the latest unstable version of HashCash-Consultants core.
+  install_HashCash-Consultants_core:
     parameters:
       core-version:
         type: string
         default: "18.0.3-746.f3baea6.focal"
     steps:
       - run:
-          name: Install Hcnet Core <<#parameters.core-version>> (version <<parameters.core-version>>)<</parameters.core-version>>
+          name: Install HashCash-Consultants Core <<#parameters.core-version>> (version <<parameters.core-version>>)<</parameters.core-version>>
           command: |
-            sudo wget -qO - https://apt.hcnet.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
-            sudo bash -c 'echo "deb https://apt.hcnet.org focal unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
-            sudo apt-get update && sudo apt-get install -y hcnet-core<<#parameters.core-version>>=<<parameters.core-version>><</parameters.core-version>>
-            echo "using hcnet core version $(hcnet-core version)"
-            echo "export CAPTIVE_CORE_BIN=/usr/bin/hcnet-core" >> $BASH_ENV
+            sudo wget -qO - https://apt.HashCash-Consultants.org/SDF.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=true sudo apt-key add -
+            sudo bash -c 'echo "deb https://apt.HashCash-Consultants.org focal unstable" > /etc/apt/sources.list.d/SDF-unstable.list'
+            sudo apt-get update && sudo apt-get install -y HashCash-Consultants-core<<#parameters.core-version>>=<<parameters.core-version>><</parameters.core-version>>
+            echo "using HashCash-Consultants core version $(HashCash-Consultants-core version)"
+            echo "export CAPTIVE_CORE_BIN=/usr/bin/HashCash-Consultants-core" >> $BASH_ENV
 
   check_ingest_state:
     steps:
       - run:
           name: Getting latest checkpoint ledger
           command: |
-            export LATEST_LEDGER=`curl -s http://history.hcnet.org/prd/core-live/core_live_001/.well-known/hcnet-history.json | jq -r '.currentLedger'`
+            export LATEST_LEDGER=`curl -s http://history.HashCash-Consultants.org/prd/core-live/core_live_001/.well-known/HashCash-Consultants-history.json | jq -r '.currentLedger'`
             echo $LATEST_LEDGER # For debug
             echo "export LATEST_LEDGER=$LATEST_LEDGER" >> $BASH_ENV # Persist between steps
       - run:
           name: Dump state using ingest
           command: go run -v ./exp/tools/dump-ledger-state/
       - run:
-          name: Init hcnet-core DB
-          command: hcnet-core --conf ./exp/tools/dump-ledger-state/hcnet-core.cfg new-db
+          name: Init HashCash-Consultants-core DB
+          command: HashCash-Consultants-core --conf ./exp/tools/dump-ledger-state/HashCash-Consultants-core.cfg new-db
       - run:
           name: Catchup core
-          command: hcnet-core --conf ./exp/tools/dump-ledger-state/hcnet-core.cfg catchup $LATEST_LEDGER/1
+          command: HashCash-Consultants-core --conf ./exp/tools/dump-ledger-state/HashCash-Consultants-core.cfg catchup $LATEST_LEDGER/1
       - run:
-          name: Dump hcnet-core DB
+          name: Dump HashCash-Consultants-core DB
           command: ./exp/tools/dump-ledger-state/dump_core_db.sh
       - run:
           name: Compare state dumps
@@ -225,7 +225,7 @@ commands:
 jobs:
   # check_code_1_17 performs code checks using Go 1.17.
   check_code_1_17:
-    working_directory: /go/src/github.com/hcnet/go
+    working_directory: /go/src/github.com/HashCash-Consultants/go
     docker:
       - image: golang:1.17
     steps:
@@ -239,7 +239,7 @@ jobs:
 
   # test_code_1_16 performs all package tests using Go 1.16.
   test_code_1_16:
-    working_directory: /go/src/github.com/hcnet/go
+    working_directory: /go/src/github.com/HashCash-Consultants/go
     docker:
       - image: golang:1.16
         environment:
@@ -259,7 +259,7 @@ jobs:
 
   # test_code_1_16 performs all package tests using Go 1.16 and Postgres 10.
   test_code_1_16_postgres10:
-    working_directory: /go/src/github.com/hcnet/go
+    working_directory: /go/src/github.com/HashCash-Consultants/go
     docker:
       - image: golang:1.16
         environment:
@@ -280,7 +280,7 @@ jobs:
 
   # test_code_1_17 performs all package tests using Go 1.17.
   test_code_1_17:
-    working_directory: /go/src/github.com/hcnet/go
+    working_directory: /go/src/github.com/HashCash-Consultants/go
     docker:
       - image: golang:1.17
         environment:
@@ -300,7 +300,7 @@ jobs:
 
   # test_code_1_17 performs all package tests using Go 1.17 and Postgres 10.
   test_code_1_17_postgres10:
-    working_directory: /go/src/github.com/hcnet/go
+    working_directory: /go/src/github.com/HashCash-Consultants/go
     docker:
       - image: golang:1.17
         environment:
@@ -323,7 +323,7 @@ jobs:
   # NOTE: this commands relies on an env var called GITHUB_TOKEN which is a
   # GH OAUTH token with `repo` access.
   publish_artifacts:
-    working_directory: /go/src/github.com/hcnet/go
+    working_directory: /go/src/github.com/HashCash-Consultants/go
     docker:
       - image: golang:1.17
     steps:
@@ -354,9 +354,9 @@ jobs:
           name: Build and Push Docker image
           command: |
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            docker build --no-cache -f exp/tools/dump-ledger-state/Dockerfile --build-arg GITCOMMIT=$CIRCLE_SHA1 -t hcnet/ledger-state-diff:$CIRCLE_SHA1 -t hcnet/ledger-state-diff:latest .
-            docker push hcnet/ledger-state-diff:$CIRCLE_SHA1
-            docker push hcnet/ledger-state-diff:latest
+            docker build --no-cache -f exp/tools/dump-ledger-state/Dockerfile --build-arg GITCOMMIT=$CIRCLE_SHA1 -t HashCash-Consultants/ledger-state-diff:$CIRCLE_SHA1 -t HashCash-Consultants/ledger-state-diff:latest .
+            docker push HashCash-Consultants/ledger-state-diff:$CIRCLE_SHA1
+            docker push HashCash-Consultants/ledger-state-diff:latest
 
   publish_aurora_docker_image:
     docker:
@@ -368,11 +368,11 @@ jobs:
           name: Build and Push Docker image
           command: |
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            # CIRCLE_TAG will be prefixed by "aurora-v", here we build the aurora docker image and tag it with hcnet/aurora:$VERSION
+            # CIRCLE_TAG will be prefixed by "aurora-v", here we build the aurora docker image and tag it with HashCash-Consultants/aurora:$VERSION
             # where version is CIRCLE_TAG without the "aurora-v" prefix
             VERSION=${CIRCLE_TAG#aurora-v}
-            docker build -f services/aurora/docker/Dockerfile.dev -t hcnet/aurora:$VERSION .
-            docker push hcnet/aurora:$VERSION
+            docker build -f services/aurora/docker/Dockerfile.dev -t HashCash-Consultants/aurora:$VERSION .
+            docker push HashCash-Consultants/aurora:$VERSION
 
   test_verify_range_docker_image:
     parameters:
@@ -387,12 +387,12 @@ jobs:
       - run:
           name: Build, test<<#parameters.publish>> and Push<</parameters.publish>> the Verify Range Docker image
           command: |
-            docker build -f services/aurora/docker/verify-range/Dockerfile -t hcnet/aurora-verify-range services/aurora/docker/verify-range/
+            docker build -f services/aurora/docker/verify-range/Dockerfile -t HashCash-Consultants/aurora-verify-range services/aurora/docker/verify-range/
             # Any range should do for basic testing, this range was chosen pretty early in history so that it only takes a few mins to run
-            docker run -ti -e BRANCH=${CIRCLE_SHA1} -e FROM=10000063 -e TO=10000127 hcnet/aurora-verify-range
+            docker run -ti -e BRANCH=${CIRCLE_SHA1} -e FROM=10000063 -e TO=10000127 HashCash-Consultants/aurora-verify-range
             <<#parameters.publish>>
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            docker push hcnet/aurora-verify-range
+            docker push HashCash-Consultants/aurora-verify-range
             <</parameters.publish>>
 
 
@@ -406,8 +406,8 @@ jobs:
           name: Build and Push Docker image
           command: |
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            docker build -f services/aurora/docker/Dockerfile.dev -t hcnet/aurora:latest .
-            docker push hcnet/aurora:latest
+            docker build -f services/aurora/docker/Dockerfile.dev -t HashCash-Consultants/aurora:latest .
+            docker push HashCash-Consultants/aurora:latest
 
   publish_commit_hash_aurora_docker_image:
     docker:
@@ -420,8 +420,8 @@ jobs:
           command: |
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
             TAG=$(git rev-parse --short HEAD)
-            docker build -f services/aurora/docker/Dockerfile.dev -t hcnet/aurora:$TAG .
-            docker push hcnet/aurora:$TAG
+            docker build -f services/aurora/docker/Dockerfile.dev -t HashCash-Consultants/aurora:$TAG .
+            docker push HashCash-Consultants/aurora:$TAG
 
   # test_aurora_integration performs Aurora integration tests, it's using
   # decicated vm machine to be able to start arbitrary docker containers.
@@ -430,7 +430,7 @@ jobs:
       enable-captive-core:
         type: boolean
         default: false
-    working_directory: ~/go/src/github.com/hcnet/go
+    working_directory: ~/go/src/github.com/HashCash-Consultants/go
     machine:
       image: ubuntu-2004:202010-01
     steps:
@@ -439,8 +439,8 @@ jobs:
           name: Setting env variables
           command: echo "export HORIZON_INTEGRATION_TESTS=true" >> $BASH_ENV
       - run:
-          name: Pull latest Hcnet Core image
-          command: docker pull hcnet/hcnet-core
+          name: Pull latest HashCash-Consultants Core image
+          command: docker pull HashCash-Consultants/HashCash-Consultants-core
       - install_golang
       - run:
           name: Start Aurora Postgres DB
@@ -448,7 +448,7 @@ jobs:
       - when:
           condition: <<parameters.enable-captive-core>>
           steps:
-            - install_hcnet_core
+            - install_HashCash-Consultants_core
             - run:
                 name: Setting Captive Core env variables
                 command: echo "export HORIZON_INTEGRATION_ENABLE_CAPTIVE_CORE=true" >> $BASH_ENV
@@ -456,7 +456,7 @@ jobs:
           name: Run Aurora integration tests <<#parameters.enable-captive-core>>(With captive core)<</parameters.enable-captive-core>>
           # Currently all integration tests are in a single directory.
           command: |
-            cd ~/go/src/github.com/hcnet/go
+            cd ~/go/src/github.com/HashCash-Consultants/go
             go test -race -timeout 25m -v ./services/aurora/internal/integration/...
 
 #-------------------------------------------------------------------------#
@@ -525,7 +525,7 @@ workflows:
                 only: /^aurora-v.*/
               branches:
                 ignore: /.*/
-          # Pushing hcnet/aurora:latest to docker hub requires manual approval
+          # Pushing HashCash-Consultants/aurora:latest to docker hub requires manual approval
           requires:
             - hold
       - test_verify_range_docker_image:
