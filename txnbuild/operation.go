@@ -3,7 +3,7 @@ package txnbuild
 import (
 	"fmt"
 
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // Operation represents the operation types of the Hcnet network.
@@ -76,6 +76,12 @@ func operationFromXDR(xdrOp xdr.Operation) (Operation, error) {
 		newOp = &LiquidityPoolDeposit{}
 	case xdr.OperationTypeLiquidityPoolWithdraw:
 		newOp = &LiquidityPoolWithdraw{}
+	case xdr.OperationTypeInvokeHostFunction:
+		newOp = &InvokeHostFunction{}
+	case xdr.OperationTypeExtendFootprintTtl:
+		newOp = &ExtendFootprintTtl{}
+	case xdr.OperationTypeRestoreFootprint:
+		newOp = &RestoreFootprint{}
 	default:
 		return nil, fmt.Errorf("unknown operation type: %d", xdrOp.Body.Type)
 	}
@@ -89,4 +95,9 @@ func accountFromXDR(account *xdr.MuxedAccount) string {
 		return account.Address()
 	}
 	return ""
+}
+
+// SorobanOperation represents a smart contract operation on the Hcnet network.
+type SorobanOperation interface {
+	BuildTransactionExt() (xdr.TransactionExt, error)
 }

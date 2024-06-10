@@ -4,9 +4,9 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/hcnet/go/services/aurora/internal/db2"
-	"github.com/hcnet/go/services/aurora/internal/test"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 var (
@@ -112,6 +112,7 @@ func TestStreamAllLiquidity(t *testing.T) {
 		pools = append(pools, pool)
 		return nil
 	})
+	tt.Assert.NoError(err)
 	sort.Slice(pools, func(i, j int) bool {
 		return pools[i].PoolID < pools[j].PoolID
 	})

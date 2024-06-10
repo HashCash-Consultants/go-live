@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hcnet/go/clients/auroraclient"
-	"github.com/hcnet/go/keypair"
-	"github.com/hcnet/go/network"
-	"github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/support/log"
-	"github.com/hcnet/go/support/render/problem"
-	"github.com/hcnet/go/txnbuild"
+	"github.com/shantanu-hashcash/go/clients/auroraclient"
+	"github.com/shantanu-hashcash/go/keypair"
+	"github.com/shantanu-hashcash/go/network"
+	"github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/support/log"
+	"github.com/shantanu-hashcash/go/support/render/problem"
+	"github.com/shantanu-hashcash/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -75,7 +75,7 @@ func TestGetOrFundIssuerAccount_failsIfNotDefaultTesntet(t *testing.T) {
 
 	_, err := getOrFundIssuerAccount(issuerKP.Address(), &auroraMock)
 	wantErrMsg := fmt.Sprintf("getting detail for account %s: problem: not_found", issuerKP.Address())
-	require.EqualError(t, err, wantErrMsg)
+	require.True(t, strings.Contains(err.Error(), wantErrMsg))
 }
 
 func TestSetup(t *testing.T) {

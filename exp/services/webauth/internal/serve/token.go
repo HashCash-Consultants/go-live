@@ -2,15 +2,17 @@ package serve
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/hcnet/go/clients/auroraclient"
-	"github.com/hcnet/go/keypair"
-	"github.com/hcnet/go/support/http/httpdecode"
-	supportlog "github.com/hcnet/go/support/log"
-	"github.com/hcnet/go/support/render/httpjson"
-	"github.com/hcnet/go/txnbuild"
+	"github.com/shantanu-hashcash/go/clients/auroraclient"
+	"github.com/shantanu-hashcash/go/keypair"
+	"github.com/shantanu-hashcash/go/support/http/httpdecode"
+	supportlog "github.com/shantanu-hashcash/go/support/log"
+	"github.com/shantanu-hashcash/go/support/render/httpjson"
+	"github.com/shantanu-hashcash/go/txnbuild"
+	"github.com/shantanu-hashcash/go/xdr"
 	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
 )
@@ -52,9 +54,10 @@ func (h tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		clientAccountID string
 		signingAddress  *keypair.FromAddress
 		homeDomain      string
+		memo            *txnbuild.MemoID
 	)
 	for _, s := range h.SigningAddresses {
-		tx, clientAccountID, homeDomain, err = txnbuild.ReadChallengeTx(req.Transaction, s.Address(), h.NetworkPassphrase, h.Domain, h.HomeDomains)
+		tx, clientAccountID, homeDomain, memo, err = txnbuild.ReadChallengeTx(req.Transaction, s.Address(), h.NetworkPassphrase, h.Domain, h.HomeDomains)
 		if err == nil {
 			signingAddress = s
 			break
@@ -80,9 +83,19 @@ func (h tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		WithField("tx", hash).
 		WithField("account", clientAccountID).
 		WithField("serversigner", signingAddress.Address()).
-		WithField("homedomain", homeDomain)
+		WithField("homedomain", homeDomain).
+		WithField("memo", memo)
 
 	l.Info("Start verifying challenge transaction.")
+
+	muxedAccount, err := xdr.AddressToMuxedAccount(clientAccountID)
+	if err != nil {
+		badRequest.Render(w)
+		return
+	}
+	if muxedAccount.Type == xdr.CryptoKeyTypeKeyTypeMuxedEd25519 {
+		clientAccountID = muxedAccount.ToAccountId().Address()
+	}
 
 	var clientAccountExists bool
 	clientAccount, err := h.AuroraClient.AccountDetail(auroraclient.AccountRequest{AccountID: clientAccountID})
@@ -140,10 +153,20 @@ func (h tokenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var sub string
+	if muxedAccount.Type == xdr.CryptoKeyTypeKeyTypeEd25519 {
+		sub = clientAccountID
+		if memo != nil {
+			sub += ":" + strconv.FormatUint(uint64(*memo), 10)
+		}
+	} else {
+		sub = muxedAccount.Address()
+	}
+
 	issuedAt := time.Unix(tx.Timebounds().MinTime, 0)
 	claims := jwt.Claims{
 		Issuer:   h.JWTIssuer,
-		Subject:  clientAccountID,
+		Subject:  sub,
 		IssuedAt: jwt.NewNumericDate(issuedAt),
 		Expiry:   jwt.NewNumericDate(issuedAt.Add(h.JWTExpiresIn)),
 	}

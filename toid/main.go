@@ -7,7 +7,7 @@ import (
 
 // ID represents the total order of Ledgers, Transactions and
 // Operations. This is an implementation of SEP-35:
-// https://github.com/hcnet/hcnet-protocol/blob/master/ecosystem/sep-0035.md
+// https://github.com/shantanu-hashcash/hcnet-protocol/blob/master/ecosystem/sep-0035.md
 //
 // Operations within the hcnet network have a total order, expressed by three
 // pieces of information:  the ledger sequence the operation was validated in,
@@ -124,6 +124,9 @@ func (id *ID) IncOperationOrder() {
 }
 
 // New creates a new total order ID
+//
+// FIXME: I feel like since ledger sequences are uint32s, TOIDs should
+// take that into account for the ledger parameter...
 func New(ledger int32, tx int32, op int32) *ID {
 	return &ID{
 		LedgerSequence:   ledger,

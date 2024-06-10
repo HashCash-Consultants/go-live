@@ -6,11 +6,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hcnet/go/ingest"
-	"github.com/hcnet/go/ingest/ledgerbackend"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
-	"github.com/stretchr/testify/mock"
+	"github.com/shantanu-hashcash/go/ingest"
+	"github.com/shantanu-hashcash/go/ingest/ledgerbackend"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -50,7 +49,7 @@ func (s *BuildStateTestSuite) SetupTest() {
 	}
 	s.system.initMetrics()
 
-	s.historyQ.On("Begin").Return(nil).Once()
+	s.historyQ.On("Begin", s.ctx).Return(nil).Once()
 	s.historyQ.On("Rollback").Return(nil).Once()
 
 	s.ledgerBackend.On("IsPrepared", s.ctx, ledgerbackend.UnboundedRange(63)).Return(false, nil).Once()
@@ -83,12 +82,6 @@ func (s *BuildStateTestSuite) mockCommonHistoryQ() {
 	s.historyQ.On("UpdateLastLedgerIngest", s.ctx, s.lastLedger).Return(nil).Once()
 	s.historyQ.On("UpdateExpStateInvalid", s.ctx, false).Return(nil).Once()
 	s.historyQ.On("TruncateIngestStateTables", s.ctx).Return(nil).Once()
-	s.hcnetCoreClient.On(
-		"SetCursor",
-		mock.AnythingOfType("*context.timerCtx"),
-		defaultCoreCursorName,
-		int32(62),
-	).Return(nil).Once()
 }
 
 func (s *BuildStateTestSuite) TestCheckPointLedgerIsZero() {
@@ -136,7 +129,7 @@ func (s *BuildStateTestSuite) TestRangeNotPreparedSuccessPrepareGetLedgerFail() 
 func (s *BuildStateTestSuite) TestBeginReturnsError() {
 	// Recreate mock in this single test to remove assertions.
 	*s.historyQ = mockDBQ{}
-	s.historyQ.On("Begin").Return(errors.New("my error")).Once()
+	s.historyQ.On("Begin", s.ctx).Return(errors.New("my error")).Once()
 
 	next, err := buildState{checkpointLedger: s.checkpointLedger}.run(s.system)
 	s.Assert().Error(err)
@@ -175,12 +168,6 @@ func (s *BuildStateTestSuite) TestUpdateLastLedgerIngestReturnsError() {
 	s.historyQ.On("GetLastLedgerIngest", s.ctx).Return(s.lastLedger, nil).Once()
 	s.historyQ.On("GetIngestVersion", s.ctx).Return(CurrentVersion, nil).Once()
 	s.historyQ.On("UpdateLastLedgerIngest", s.ctx, s.lastLedger).Return(errors.New("my error")).Once()
-	s.hcnetCoreClient.On(
-		"SetCursor",
-		mock.AnythingOfType("*context.timerCtx"),
-		defaultCoreCursorName,
-		int32(62),
-	).Return(nil).Once()
 
 	next, err := buildState{checkpointLedger: s.checkpointLedger}.run(s.system)
 
@@ -194,12 +181,6 @@ func (s *BuildStateTestSuite) TestUpdateExpStateInvalidReturnsError() {
 	s.historyQ.On("GetIngestVersion", s.ctx).Return(CurrentVersion, nil).Once()
 	s.historyQ.On("UpdateLastLedgerIngest", s.ctx, s.lastLedger).Return(nil).Once()
 	s.historyQ.On("UpdateExpStateInvalid", s.ctx, false).Return(errors.New("my error")).Once()
-	s.hcnetCoreClient.On(
-		"SetCursor",
-		mock.AnythingOfType("*context.timerCtx"),
-		defaultCoreCursorName,
-		int32(62),
-	).Return(nil).Once()
 
 	next, err := buildState{checkpointLedger: s.checkpointLedger}.run(s.system)
 
@@ -214,13 +195,6 @@ func (s *BuildStateTestSuite) TestTruncateIngestStateTablesReturnsError() {
 	s.historyQ.On("UpdateLastLedgerIngest", s.ctx, s.lastLedger).Return(nil).Once()
 	s.historyQ.On("UpdateExpStateInvalid", s.ctx, false).Return(nil).Once()
 	s.historyQ.On("TruncateIngestStateTables", s.ctx).Return(errors.New("my error")).Once()
-
-	s.hcnetCoreClient.On(
-		"SetCursor",
-		mock.AnythingOfType("*context.timerCtx"),
-		defaultCoreCursorName,
-		int32(62),
-	).Return(nil).Once()
 
 	next, err := buildState{checkpointLedger: s.checkpointLedger}.run(s.system)
 
@@ -251,12 +225,6 @@ func (s *BuildStateTestSuite) TestRunHistoryArchiveIngestionGenesisReturnsError(
 	s.historyQ.On("UpdateLastLedgerIngest", s.ctx, uint32(0)).Return(nil).Once()
 	s.historyQ.On("UpdateExpStateInvalid", s.ctx, false).Return(nil).Once()
 	s.historyQ.On("TruncateIngestStateTables", s.ctx).Return(nil).Once()
-	s.hcnetCoreClient.On(
-		"SetCursor",
-		mock.AnythingOfType("*context.timerCtx"),
-		defaultCoreCursorName,
-		int32(0),
-	).Return(nil).Once()
 
 	s.runner.
 		On("RunGenesisStateIngestion").

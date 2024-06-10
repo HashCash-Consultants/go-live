@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/protocols/aurora/operations"
-	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/support/render/hal"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/protocols/aurora/operations"
+	auroraContext "github.com/shantanu-hashcash/go/services/aurora/internal/context"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // NewOperation creates a new operation resource, finding the appropriate type to use
@@ -20,10 +20,11 @@ func NewOperation(
 	transactionHash string,
 	transactionRow *history.Transaction,
 	ledger history.Ledger,
+	skipTxMeta bool,
 ) (result hal.Pageable, err error) {
 
 	base := operations.Base{}
-	err = PopulateBaseOperation(ctx, &base, operationRow, transactionHash, transactionRow, ledger)
+	err = PopulateBaseOperation(ctx, &base, operationRow, transactionHash, transactionRow, ledger, skipTxMeta)
 	if err != nil {
 		return
 	}
@@ -146,6 +147,18 @@ func NewOperation(
 		e := operations.LiquidityPoolWithdraw{Base: base}
 		err = operationRow.UnmarshalDetails(&e)
 		result = e
+	case xdr.OperationTypeInvokeHostFunction:
+		e := operations.InvokeHostFunction{Base: base}
+		err = operationRow.UnmarshalDetails(&e)
+		result = e
+	case xdr.OperationTypeExtendFootprintTtl:
+		e := operations.ExtendFootprintTtl{Base: base}
+		err = operationRow.UnmarshalDetails(&e)
+		result = e
+	case xdr.OperationTypeRestoreFootprint:
+		e := operations.RestoreFootprint{Base: base}
+		err = operationRow.UnmarshalDetails(&e)
+		result = e
 	default:
 		result = base
 	}
@@ -154,7 +167,7 @@ func NewOperation(
 }
 
 // Populate fills out this resource using `row` as the source.
-func PopulateBaseOperation(ctx context.Context, dest *operations.Base, operationRow history.Operation, transactionHash string, transactionRow *history.Transaction, ledger history.Ledger) error {
+func PopulateBaseOperation(ctx context.Context, dest *operations.Base, operationRow history.Operation, transactionHash string, transactionRow *history.Transaction, ledger history.Ledger, skipTxMeta bool) error {
 	dest.ID = fmt.Sprintf("%d", operationRow.ID)
 	dest.PT = operationRow.PagingToken()
 	dest.TransactionSuccessful = operationRow.TransactionSuccessful
@@ -178,7 +191,7 @@ func PopulateBaseOperation(ctx context.Context, dest *operations.Base, operation
 
 	if transactionRow != nil {
 		dest.Transaction = new(aurora.Transaction)
-		return PopulateTransaction(ctx, transactionHash, dest.Transaction, *transactionRow)
+		return PopulateTransaction(ctx, transactionHash, dest.Transaction, *transactionRow, skipTxMeta)
 	}
 	return nil
 }

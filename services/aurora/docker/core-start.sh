@@ -26,4 +26,4 @@ if [ "$1" = "standalone" ]; then
   popd
 fi
 
-exec hcnet-core run
+exec hcnet-core run --console

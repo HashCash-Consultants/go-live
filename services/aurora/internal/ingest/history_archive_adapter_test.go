@@ -6,12 +6,12 @@ import (
 	stdio "io"
 	"testing"
 
-	"github.com/hcnet/go/historyarchive"
-	"github.com/hcnet/go/ingest"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/shantanu-hashcash/go/historyarchive"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 type mockHistoryArchiveAdapter struct {
@@ -28,9 +28,14 @@ func (m *mockHistoryArchiveAdapter) BucketListHash(sequence uint32) (xdr.Hash, e
 	return args.Get(0).(xdr.Hash), args.Error(1)
 }
 
-func (m *mockHistoryArchiveAdapter) GetState(ctx context.Context, sequence uint32) (ingest.ChangeReader, error) {
+func (m *mockHistoryArchiveAdapter) GetState(ctx context.Context, sequence uint32) (verifiableChangeReader, error) {
 	args := m.Called(ctx, sequence)
-	return args.Get(0).(ingest.ChangeReader), args.Error(1)
+	return args.Get(0).(verifiableChangeReader), args.Error(1)
+}
+
+func (m *mockHistoryArchiveAdapter) GetStats() []historyarchive.ArchiveStats {
+	a := m.Called()
+	return a.Get(0).([]historyarchive.ArchiveStats)
 }
 
 func TestGetState_Read(t *testing.T) {

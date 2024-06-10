@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // One is the value of one whole unit of currency. Hcnet uses 7 fixed digits
@@ -115,6 +115,22 @@ func IntStringToAmount(v string) (string, error) {
 // String returns an "amount string" from the provided raw xdr.Int64 value `v`.
 func String(v xdr.Int64) string {
 	return StringFromInt64(int64(v))
+}
+
+// String128 converts a signed 128-bit integer into a string, boldly assuming
+// 7-decimal precision.
+//
+// TODO: This should be adapted to variable precision when appopriate, but 7
+// decimals is the correct default for Hcnet Classic amounts.
+func String128(v xdr.Int128Parts) string {
+	// the upper half of the i128 always indicates its sign regardless of its
+	// value, just like a native signed type
+	val := big.NewInt(int64(v.Hi))
+	val.Lsh(val, 64).Add(val, new(big.Int).SetUint64(uint64(v.Lo)))
+
+	rat := new(big.Rat).SetInt(val)
+	rat.Quo(rat, bigOne)
+	return rat.FloatString(7)
 }
 
 // StringFromInt64 returns an "amount string" from the provided raw int64 value `v`.

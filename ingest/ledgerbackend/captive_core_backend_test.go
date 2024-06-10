@@ -4,17 +4,20 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hcnet/go/historyarchive"
-	"github.com/hcnet/go/network"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/historyarchive"
+	"github.com/shantanu-hashcash/go/network"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // TODO: test frame decoding
@@ -137,9 +140,16 @@ func TestCaptiveNew(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(storagePath)
 
+	var userAgent string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userAgent = r.Header["User-Agent"][0]
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
 	executablePath := "/etc/hcnet-core"
 	networkPassphrase := network.PublicNetworkPassphrase
-	historyURLs := []string{"http://history.hcnet.org/prd/core-live/core_live_001"}
+	historyURLs := []string{server.URL}
 
 	captiveHcnetCore, err := NewCaptive(
 		CaptiveCoreConfig{
@@ -147,12 +157,16 @@ func TestCaptiveNew(t *testing.T) {
 			NetworkPassphrase:  networkPassphrase,
 			HistoryArchiveURLs: historyURLs,
 			StoragePath:        storagePath,
+			UserAgent:          "uatest",
 		},
 	)
 
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0), captiveHcnetCore.nextLedger)
 	assert.NotNil(t, captiveHcnetCore.archive)
+	_, err = captiveHcnetCore.archive.BucketExists(historyarchive.EmptyXdrArrayHash())
+	assert.NoError(t, err)
+	assert.Equal(t, "uatest", userAgent)
 }
 
 func TestCaptivePrepareRange(t *testing.T) {
@@ -355,13 +369,15 @@ func TestCaptivePrepareRange_ErrGettingRootHAS(t *testing.T) {
 	assert.EqualError(t, err, "error starting prepare range: opening subprocess: error getting latest checkpoint sequence: error getting root HAS: transient error")
 
 	err = captiveBackend.PrepareRange(ctx, UnboundedRange(100))
-	assert.EqualError(t, err, "error starting prepare range: opening subprocess: error getting latest checkpoint sequence: error getting root HAS: transient error")
+	assert.EqualError(t, err, "error starting prepare range: opening subprocess: error calculating ledger and hash for hcnet-core run: error getting latest checkpoint sequence: error getting root HAS: transient error")
 
 	mockArchive.AssertExpectations(t)
 }
 
 func TestCaptivePrepareRange_FromIsAheadOfRootHAS(t *testing.T) {
 	ctx := context.Background()
+	mockRunner := &hcnetCoreRunnerMock{}
+
 	mockArchive := &historyarchive.MockArchive{}
 	mockArchive.
 		On("GetRootHAS").
@@ -371,15 +387,80 @@ func TestCaptivePrepareRange_FromIsAheadOfRootHAS(t *testing.T) {
 
 	captiveBackend := CaptiveHcnetCore{
 		archive: mockArchive,
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
+		},
+		checkpointManager: historyarchive.NewCheckpointManager(64),
 	}
 
 	err := captiveBackend.PrepareRange(ctx, BoundedRange(100, 200))
 	assert.EqualError(t, err, "error starting prepare range: opening subprocess: from sequence: 100 is greater than max available in history archives: 64")
 
-	err = captiveBackend.PrepareRange(ctx, UnboundedRange(100))
-	assert.EqualError(t, err, "error starting prepare range: opening subprocess: trying to start online mode too far (latest checkpoint=64), only two checkpoints in the future allowed")
+	err = captiveBackend.PrepareRange(ctx, UnboundedRange(193))
+	assert.EqualError(t, err, "error starting prepare range: opening subprocess: error calculating ledger and hash for hcnet-core run: trying to start online mode too far (latest checkpoint=64), only two checkpoints in the future allowed")
+
+	mockArchive.
+		On("GetLedgerHeader", uint32(64)).
+		Return(xdr.LedgerHeaderHistoryEntry{}, nil)
+	metaChan := make(chan metaResult, 100)
+	// Core will actually start with the last checkpoint before the from ledger
+	// and then rewind to the `from` ledger.
+	for i := 64; i <= 100; i++ {
+		meta := buildLedgerCloseMeta(testLedgerHeader{sequence: uint32(i)})
+		metaChan <- metaResult{
+			LedgerCloseMeta: &meta,
+		}
+	}
+
+	mockRunner.On("runFrom", uint32(63), "0000000000000000000000000000000000000000000000000000000000000000").Return(nil).Once()
+	mockRunner.On("getMetaPipe").Return((<-chan metaResult)(metaChan))
+	mockRunner.On("context").Return(ctx)
+
+	assert.NoError(t, captiveBackend.PrepareRange(ctx, UnboundedRange(100)))
 
 	mockArchive.AssertExpectations(t)
+	mockRunner.AssertExpectations(t)
+}
+
+func TestCaptivePrepareRangeWithDB_FromIsAheadOfRootHAS(t *testing.T) {
+	ctx := context.Background()
+	mockRunner := &hcnetCoreRunnerMock{}
+
+	mockArchive := &historyarchive.MockArchive{}
+	mockArchive.
+		On("GetRootHAS").
+		Return(historyarchive.HistoryArchiveState{
+			CurrentLedger: uint32(64),
+		}, nil)
+
+	captiveBackend := CaptiveHcnetCore{
+		archive: mockArchive,
+		useDB:   true,
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
+		},
+		checkpointManager: historyarchive.NewCheckpointManager(64),
+	}
+
+	err := captiveBackend.PrepareRange(ctx, BoundedRange(100, 200))
+	assert.EqualError(t, err, "error starting prepare range: opening subprocess: from sequence: 100 is greater than max available in history archives: 64")
+
+	err = captiveBackend.PrepareRange(ctx, UnboundedRange(193))
+	assert.EqualError(t, err, "error starting prepare range: opening subprocess: error calculating ledger and hash for hcnet-core run: trying to start online mode too far (latest checkpoint=64), only two checkpoints in the future allowed")
+
+	metaChan := make(chan metaResult, 100)
+	meta := buildLedgerCloseMeta(testLedgerHeader{sequence: 100})
+	metaChan <- metaResult{
+		LedgerCloseMeta: &meta,
+	}
+	mockRunner.On("runFrom", uint32(99), "").Return(nil).Once()
+	mockRunner.On("getMetaPipe").Return((<-chan metaResult)(metaChan))
+	mockRunner.On("context").Return(ctx)
+
+	assert.NoError(t, captiveBackend.PrepareRange(ctx, UnboundedRange(100)))
+
+	mockArchive.AssertExpectations(t)
+	mockRunner.AssertExpectations(t)
 }
 
 func TestCaptivePrepareRange_ToIsAheadOfRootHAS(t *testing.T) {
@@ -443,7 +524,7 @@ func TestCaptivePrepareRange_ErrCatchup(t *testing.T) {
 
 func TestCaptivePrepareRangeUnboundedRange_ErrRunFrom(t *testing.T) {
 	mockRunner := &hcnetCoreRunnerMock{}
-	mockRunner.On("runFrom", uint32(127), "0000000000000000000000000000000000000000000000000000000000000000").Return(errors.New("transient error")).Once()
+	mockRunner.On("runFrom", uint32(126), "0000000000000000000000000000000000000000000000000000000000000000").Return(errors.New("transient error")).Once()
 	mockRunner.On("close").Return(nil).Once()
 
 	mockArchive := &historyarchive.MockArchive{}
@@ -454,7 +535,7 @@ func TestCaptivePrepareRangeUnboundedRange_ErrRunFrom(t *testing.T) {
 		}, nil)
 
 	mockArchive.
-		On("GetLedgerHeader", uint32(128)).
+		On("GetLedgerHeader", uint32(127)).
 		Return(xdr.LedgerHeaderHistoryEntry{}, nil)
 
 	ctx := context.Background()
@@ -576,6 +657,71 @@ func TestGetLatestLedgerSequence(t *testing.T) {
 
 	mockArchive.AssertExpectations(t)
 	mockRunner.AssertExpectations(t)
+}
+
+func TestGetLatestLedgerSequenceRaceCondition(t *testing.T) {
+	var fromSeq uint32 = 64
+	var toSeq uint32 = 400
+	metaChan := make(chan metaResult, toSeq)
+
+	for i := fromSeq; i <= toSeq; i++ {
+		meta := buildLedgerCloseMeta(testLedgerHeader{sequence: i})
+		metaChan <- metaResult{
+			LedgerCloseMeta: &meta,
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	mockRunner := &hcnetCoreRunnerMock{}
+	mockRunner.On("getMetaPipe").Return((<-chan metaResult)(metaChan))
+	mockRunner.On("context").Return(ctx)
+	mockRunner.On("runFrom", mock.Anything, mock.Anything).Return(nil)
+
+	mockArchive := &historyarchive.MockArchive{}
+	mockArchive.
+		On("GetRootHAS").
+		Return(historyarchive.HistoryArchiveState{
+			CurrentLedger: toSeq * 2,
+		}, nil)
+
+	mockArchive.
+		On("GetLedgerHeader", mock.Anything).
+		Return(xdr.LedgerHeaderHistoryEntry{}, nil)
+
+	captiveBackend := CaptiveHcnetCore{
+		archive: mockArchive,
+		hcnetCoreRunnerFactory: func() hcnetCoreRunnerInterface {
+			return mockRunner
+		},
+		checkpointManager: historyarchive.NewCheckpointManager(10),
+	}
+
+	ledgerRange := UnboundedRange(fromSeq)
+	err := captiveBackend.PrepareRange(ctx, ledgerRange)
+	assert.NoError(t, err)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func(ctx context.Context) {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				_, _ = captiveBackend.GetLatestLedgerSequence(ctx)
+			}
+		}
+	}(ctx)
+
+	for i := fromSeq; i < toSeq; i++ {
+		_, err = captiveBackend.GetLedger(ctx, i)
+		assert.NoError(t, err)
+	}
+
+	cancel()
+
+	wg.Wait()
 }
 
 func TestCaptiveGetLedger(t *testing.T) {
@@ -887,7 +1033,7 @@ func TestCaptiveGetLedger_ErrReadingMetaResult(t *testing.T) {
 		}
 	}
 	metaChan <- metaResult{
-		err: fmt.Errorf("unmarshalling error"),
+		err: fmt.Errorf("unmarshaling error"),
 	}
 
 	ctx := context.Background()
@@ -899,6 +1045,7 @@ func TestCaptiveGetLedger_ErrReadingMetaResult(t *testing.T) {
 	mockRunner.On("close").Return(nil).Run(func(args mock.Arguments) {
 		cancel()
 	}).Once()
+	mockRunner.On("getProcessExitError").Return(false, nil)
 
 	// even if the request to fetch the latest checkpoint succeeds, we should fail at creating the subprocess
 	mockArchive := &historyarchive.MockArchive{}
@@ -927,7 +1074,7 @@ func TestCaptiveGetLedger_ErrReadingMetaResult(t *testing.T) {
 
 	// try reading from an empty buffer
 	_, err = captiveBackend.GetLedger(ctx, 66)
-	tt.EqualError(err, "unmarshalling error")
+	tt.EqualError(err, "unmarshaling error")
 
 	// not closed even if there is an error getting ledger
 	tt.False(captiveBackend.closed)
@@ -1084,17 +1231,19 @@ func TestGetLedgerBoundsCheck(t *testing.T) {
 	mockRunner.AssertExpectations(t)
 }
 
-func TestCaptiveGetLedgerTerminatedUnexpectedly(t *testing.T) {
+type GetLedgerTerminatedTestCase struct {
+	name               string
+	ctx                context.Context
+	ledgers            []metaResult
+	processExited      bool
+	processExitedError error
+	expectedError      string
+}
+
+func CaptiveGetLedgerTerminatedUnexpectedlyTestCases() []GetLedgerTerminatedTestCase {
 	ledger64 := buildLedgerCloseMeta(testLedgerHeader{sequence: uint32(64)})
 
-	for _, testCase := range []struct {
-		name               string
-		ctx                context.Context
-		ledgers            []metaResult
-		processExited      bool
-		processExitedError error
-		expectedError      string
-	}{
+	return []GetLedgerTerminatedTestCase{
 		{
 			"hcnet core exited unexpectedly without error",
 			context.Background(),
@@ -1135,7 +1284,29 @@ func TestCaptiveGetLedgerTerminatedUnexpectedly(t *testing.T) {
 			nil,
 			"meta pipe closed unexpectedly",
 		},
-	} {
+		{
+			"Parser error while reading from the pipe resulting in hcnet-core exit",
+			context.Background(),
+			[]metaResult{{LedgerCloseMeta: &ledger64},
+				{LedgerCloseMeta: nil, err: errors.New("Parser error")}},
+			true,
+			nil,
+			"Parser error",
+		},
+		{
+			"hcnet core exited unexpectedly with an error resulting in meta pipe closed",
+			context.Background(),
+			[]metaResult{{LedgerCloseMeta: &ledger64},
+				{LedgerCloseMeta: &ledger64, err: errors.New("EOF while decoding")}},
+			true,
+			fmt.Errorf("signal kill"),
+			"hcnet core exited unexpectedly: signal kill",
+		},
+	}
+}
+
+func TestCaptiveGetLedgerTerminatedUnexpectedly(t *testing.T) {
+	for _, testCase := range CaptiveGetLedgerTerminatedUnexpectedlyTestCases() {
 		t.Run(testCase.name, func(t *testing.T) {
 			metaChan := make(chan metaResult, 100)
 
@@ -1192,6 +1363,12 @@ func TestCaptiveUseOfLedgerHashStore(t *testing.T) {
 			Header: xdr.LedgerHeader{
 				PreviousLedgerHash: xdr.Hash{1, 1, 1, 1},
 			},
+		}, nil)
+
+	mockArchive.
+		On("GetRootHAS").
+		Return(historyarchive.HistoryArchiveState{
+			CurrentLedger: uint32(4095),
 		}, nil)
 
 	mockLedgerHashStore := &MockLedgerHashStore{}
@@ -1283,6 +1460,11 @@ func TestCaptiveRunFromParams(t *testing.T) {
 					Header: xdr.LedgerHeader{
 						PreviousLedgerHash: xdr.Hash{1, 1, 1, 1},
 					},
+				}, nil)
+			mockArchive.
+				On("GetRootHAS").
+				Return(historyarchive.HistoryArchiveState{
+					CurrentLedger: uint32(255),
 				}, nil)
 
 			captiveBackend := CaptiveHcnetCore{
@@ -1419,7 +1601,7 @@ func TestCaptivePreviousLedgerCheck(t *testing.T) {
 
 	ctx := context.Background()
 	mockRunner := &hcnetCoreRunnerMock{}
-	mockRunner.On("runFrom", uint32(299), "0101010100000000000000000000000000000000000000000000000000000000").Return(nil).Once()
+	mockRunner.On("runFrom", uint32(254), "0101010100000000000000000000000000000000000000000000000000000000").Return(nil).Once()
 	mockRunner.On("getMetaPipe").Return((<-chan metaResult)(metaChan))
 	mockRunner.On("context").Return(ctx)
 	mockRunner.On("close").Return(nil).Once()
@@ -1431,7 +1613,7 @@ func TestCaptivePreviousLedgerCheck(t *testing.T) {
 			CurrentLedger: uint32(255),
 		}, nil)
 	mockArchive.
-		On("GetLedgerHeader", uint32(300)).
+		On("GetLedgerHeader", uint32(255)).
 		Return(xdr.LedgerHeaderHistoryEntry{
 			Header: xdr.LedgerHeader{
 				PreviousLedgerHash: xdr.Hash{1, 1, 1, 1},

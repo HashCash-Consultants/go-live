@@ -14,7 +14,7 @@ To checkout, build, and run most tests these tools are required:
 - [Go](https://golang.org/dl) (this repository is officially supported on the last two releases of Go)
 
 To run some tests these tools are also required:
-- PostgreSQL 9.6+ server running locally, or set [environment variables](https://www.postgresql.org/docs/9.6/libpq-envars.html) (e.g. `PGHOST`, etc) for alternative host.
+- PostgreSQL 12+ server running locally, or set [environment variables](https://www.postgresql.org/docs/12/libpq-envars.html) (e.g. `PGHOST`, etc) for alternative host.
 - MySQL 10.1+ server running locally.
 
 ## Get the code
@@ -22,7 +22,7 @@ To run some tests these tools are also required:
 Check the code out anywhere, using a `GOPATH` is not required.
 
 ```
-git clone https://github.com/hcnet/go
+git clone https://github.com/shantanu-hashcash/go
 ```
 
 ## Installing dependencies
@@ -96,4 +96,4 @@ git checkout <branch>
 golistcmp go.list.master <(go list -m -json all)
 ```
 
-[golistcmp]: https://github.com/hcnet/golistcmp
+[golistcmp]: https://github.com/shantanu-hashcash/golistcmp

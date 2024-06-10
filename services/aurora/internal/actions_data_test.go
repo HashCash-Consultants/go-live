@@ -8,10 +8,10 @@ import (
 	"github.com/guregu/null"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/ingest"
-	"github.com/hcnet/go/services/aurora/internal/test"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ingest"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 var (
@@ -44,12 +44,16 @@ func TestDataActions_Show(t *testing.T) {
 	ht.Assert.NoError(err)
 	err = q.UpdateIngestVersion(ht.Ctx, ingest.CurrentVersion)
 	ht.Assert.NoError(err)
-	_, err = q.InsertLedger(ht.Ctx, xdr.LedgerHeaderHistoryEntry{
+	ht.Assert.NoError(q.Begin(ht.Ctx))
+	ledgerBatch := q.NewLedgerBatchInsertBuilder()
+	err = ledgerBatch.Add(xdr.LedgerHeaderHistoryEntry{
 		Header: xdr.LedgerHeader{
 			LedgerSeq: 100,
 		},
 	}, 0, 0, 0, 0, 0)
 	ht.Assert.NoError(err)
+	ht.Assert.NoError(ledgerBatch.Exec(ht.Ctx, q))
+	ht.Assert.NoError(q.Commit())
 
 	err = q.UpsertAccountData(ht.Ctx, []history.Data{data1, data2})
 	assert.NoError(t, err)
@@ -75,7 +79,7 @@ func TestDataActions_Show(t *testing.T) {
 	}
 
 	result = map[string]string{}
-	// regression: https://github.com/hcnet/aurora/issues/325
+	// regression: https://github.com/shantanu-hashcash/aurora/issues/325
 	// names with special characters do not work
 	w = ht.Get(prefix + "/data/name%20")
 	if ht.Assert.Equal(200, w.Code) {

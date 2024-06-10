@@ -1,8 +1,8 @@
 package ingest
 
 import (
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // LedgerTransaction represents the data for a single transaction within a ledger.
@@ -14,8 +14,9 @@ type LedgerTransaction struct {
 	// you know what you are doing.
 	// Use LedgerTransaction.GetChanges() for higher level access to ledger
 	// entry changes.
-	FeeChanges xdr.LedgerEntryChanges
-	UnsafeMeta xdr.TransactionMeta
+	FeeChanges    xdr.LedgerEntryChanges
+	UnsafeMeta    xdr.TransactionMeta
+	LedgerVersion uint32
 }
 
 func (t *LedgerTransaction) txInternalError() bool {
@@ -44,8 +45,8 @@ func (t *LedgerTransaction) GetChanges() ([]Change, error) {
 		txChanges := GetChangesFromLedgerEntryChanges(v1Meta.TxChanges)
 		changes = append(changes, txChanges...)
 
-		// Ignore operations meta if txInternalError https://github.com/hcnet/go/issues/2111
-		if t.txInternalError() {
+		// Ignore operations meta if txInternalError https://github.com/shantanu-hashcash/go/issues/2111
+		if t.txInternalError() && t.LedgerVersion <= 12 {
 			return changes, nil
 		}
 
@@ -55,26 +56,44 @@ func (t *LedgerTransaction) GetChanges() ([]Change, error) {
 			)
 			changes = append(changes, opChanges...)
 		}
+	case 2, 3:
+		var (
+			beforeChanges, afterChanges xdr.LedgerEntryChanges
+			operationMeta               []xdr.OperationMeta
+		)
 
-	case 2:
-		v2Meta := t.UnsafeMeta.MustV2()
-		txChangesBefore := GetChangesFromLedgerEntryChanges(v2Meta.TxChangesBefore)
+		switch t.UnsafeMeta.V {
+		case 2:
+			v2Meta := t.UnsafeMeta.MustV2()
+			beforeChanges = v2Meta.TxChangesBefore
+			afterChanges = v2Meta.TxChangesAfter
+			operationMeta = v2Meta.Operations
+		case 3:
+			v3Meta := t.UnsafeMeta.MustV3()
+			beforeChanges = v3Meta.TxChangesBefore
+			afterChanges = v3Meta.TxChangesAfter
+			operationMeta = v3Meta.Operations
+		default:
+			panic("Invalid meta version, expected 2 or 3")
+		}
+
+		txChangesBefore := GetChangesFromLedgerEntryChanges(beforeChanges)
 		changes = append(changes, txChangesBefore...)
 
 		// Ignore operations meta and txChangesAfter if txInternalError
-		// https://github.com/hcnet/go/issues/2111
-		if t.txInternalError() {
+		// https://github.com/shantanu-hashcash/go/issues/2111
+		if t.txInternalError() && t.LedgerVersion <= 12 {
 			return changes, nil
 		}
 
-		for _, operationMeta := range v2Meta.Operations {
+		for _, operationMeta := range operationMeta {
 			opChanges := GetChangesFromLedgerEntryChanges(
 				operationMeta.Changes,
 			)
 			changes = append(changes, opChanges...)
 		}
 
-		txChangesAfter := GetChangesFromLedgerEntryChanges(v2Meta.TxChangesAfter)
+		txChangesAfter := GetChangesFromLedgerEntryChanges(afterChanges)
 		changes = append(changes, txChangesAfter...)
 	default:
 		return changes, errors.New("Unsupported TransactionMeta version")
@@ -97,31 +116,28 @@ func (t *LedgerTransaction) GetOperation(index uint32) (xdr.Operation, bool) {
 func (t *LedgerTransaction) GetOperationChanges(operationIndex uint32) ([]Change, error) {
 	changes := []Change{}
 
-	// Transaction meta
-	switch t.UnsafeMeta.V {
-	case 0:
+	if t.UnsafeMeta.V == 0 {
 		return changes, errors.New("TransactionMeta.V=0 not supported")
+	}
+
+	// Ignore operations meta if txInternalError https://github.com/shantanu-hashcash/go/issues/2111
+	if t.txInternalError() && t.LedgerVersion <= 12 {
+		return changes, nil
+	}
+
+	var operationMeta []xdr.OperationMeta
+	switch t.UnsafeMeta.V {
 	case 1:
-		// Ignore operations meta if txInternalError https://github.com/hcnet/go/issues/2111
-		if t.txInternalError() {
-			return changes, nil
-		}
-
-		v1Meta := t.UnsafeMeta.MustV1()
-		changes = operationChanges(v1Meta.Operations, operationIndex)
+		operationMeta = t.UnsafeMeta.MustV1().Operations
 	case 2:
-		// Ignore operations meta if txInternalError https://github.com/hcnet/go/issues/2111
-		if t.txInternalError() {
-			return changes, nil
-		}
-
-		v2Meta := t.UnsafeMeta.MustV2()
-		changes = operationChanges(v2Meta.Operations, operationIndex)
+		operationMeta = t.UnsafeMeta.MustV2().Operations
+	case 3:
+		operationMeta = t.UnsafeMeta.MustV3().Operations
 	default:
 		return changes, errors.New("Unsupported TransactionMeta version")
 	}
 
-	return changes, nil
+	return operationChanges(operationMeta, operationIndex), nil
 }
 
 func operationChanges(ops []xdr.OperationMeta, index uint32) []Change {
@@ -133,4 +149,9 @@ func operationChanges(ops []xdr.OperationMeta, index uint32) []Change {
 	return GetChangesFromLedgerEntryChanges(
 		operationMeta.Changes,
 	)
+}
+
+// GetDiagnosticEvents returns all contract events emitted by a given operation.
+func (t *LedgerTransaction) GetDiagnosticEvents() ([]xdr.DiagnosticEvent, error) {
+	return t.UnsafeMeta.GetDiagnosticEvents()
 }

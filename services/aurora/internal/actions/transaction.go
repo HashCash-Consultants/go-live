@@ -4,16 +4,16 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/hcnet/go/protocols/aurora"
-	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
-	"github.com/hcnet/go/services/aurora/internal/db2"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/ledger"
-	"github.com/hcnet/go/services/aurora/internal/resourceadapter"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/render/hal"
-	supportProblem "github.com/hcnet/go/support/render/problem"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/protocols/aurora"
+	auroraContext "github.com/shantanu-hashcash/go/services/aurora/internal/context"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ledger"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/resourceadapter"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/render/hal"
+	supportProblem "github.com/shantanu-hashcash/go/support/render/problem"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // TransactionQuery query struct for transactions/id end-point
@@ -23,6 +23,7 @@ type TransactionQuery struct {
 
 // GetTransactionByHashHandler is the action handler for the end-point returning a transaction.
 type GetTransactionByHashHandler struct {
+	SkipTxMeta bool
 }
 
 // GetResource returns a transaction page.
@@ -49,7 +50,7 @@ func (handler GetTransactionByHashHandler) GetResource(w HeaderWriter, r *http.R
 		return resource, errors.Wrap(err, "loading transaction record")
 	}
 
-	if err = resourceadapter.PopulateTransaction(ctx, qp.TransactionHash, &resource, record); err != nil {
+	if err = resourceadapter.PopulateTransaction(ctx, qp.TransactionHash, &resource, record, handler.SkipTxMeta); err != nil {
 		return resource, errors.Wrap(err, "could not populate transaction")
 	}
 	return resource, nil
@@ -90,6 +91,7 @@ func (qp TransactionsQuery) Validate() error {
 // GetTransactionsHandler is the action handler for all end-points returning a list of transactions.
 type GetTransactionsHandler struct {
 	LedgerState *ledger.State
+	SkipTxMeta  bool
 }
 
 // GetResourcePage returns a page of transactions.
@@ -126,7 +128,7 @@ func (handler GetTransactionsHandler) GetResourcePage(w HeaderWriter, r *http.Re
 
 	for _, record := range records {
 		var res aurora.Transaction
-		err = resourceadapter.PopulateTransaction(ctx, record.TransactionHash, &res, record)
+		err = resourceadapter.PopulateTransaction(ctx, record.TransactionHash, &res, record, handler.SkipTxMeta)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not populate transaction")
 		}
@@ -172,7 +174,7 @@ func loadTransactionRecords(ctx context.Context, hq *history.Q, qp TransactionsQ
 			var resultXDR xdr.TransactionResult
 			err = xdr.SafeUnmarshalBase64(t.TxResult, &resultXDR)
 			if err != nil {
-				return nil, errors.Wrap(err, "unmarshalling tx result")
+				return nil, errors.Wrap(err, "unmarshaling tx result")
 			}
 
 			if !resultXDR.Successful() {

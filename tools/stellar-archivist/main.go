@@ -13,8 +13,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/spf13/cobra"
-	"github.com/hcnet/go/historyarchive"
-	"github.com/hcnet/go/support/errors"
+	"github.com/shantanu-hashcash/go/historyarchive"
+	"github.com/shantanu-hashcash/go/support/errors"
 )
 
 const checkpointFrequency = uint32(64)
@@ -51,7 +51,7 @@ type Options struct {
 	Debug       bool
 	Trace       bool
 	CommandOpts historyarchive.CommandOptions
-	ConnectOpts historyarchive.ConnectOptions
+	ConnectOpts historyarchive.ArchiveOptions
 }
 
 func (opts *Options) SetRange(srcArch *historyarchive.Archive, dstArch *historyarchive.Archive) {

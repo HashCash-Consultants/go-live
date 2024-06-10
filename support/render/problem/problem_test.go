@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	ge "github.com/go-errors/errors"
-	"github.com/hcnet/go/support/log"
-	"github.com/hcnet/go/support/test"
+	"github.com/shantanu-hashcash/go/support/log"
+	"github.com/shantanu-hashcash/go/support/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -183,4 +183,10 @@ func TestProblemIsKnownError(t *testing.T) {
 
 	err = problem.IsKnownError(errors.New("foo"))
 	assert.NoError(t, err)
+}
+
+func TestErrorIncludesPInformation(t *testing.T) {
+	err_str := ServerError.Error()
+	assert.True(t, strings.Contains(err_str, ServerError.Detail))
+	assert.True(t, strings.Contains(err_str, ServerError.Type))
 }

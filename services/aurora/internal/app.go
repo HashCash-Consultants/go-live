@@ -7,27 +7,28 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/hcnet/go/clients/hcnetcore"
-	"github.com/hcnet/go/services/aurora/internal/corestate"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/httpx"
-	"github.com/hcnet/go/services/aurora/internal/ingest"
-	"github.com/hcnet/go/services/aurora/internal/ledger"
-	"github.com/hcnet/go/services/aurora/internal/logmetrics"
-	"github.com/hcnet/go/services/aurora/internal/operationfeestats"
-	"github.com/hcnet/go/services/aurora/internal/paths"
-	"github.com/hcnet/go/services/aurora/internal/reap"
-	"github.com/hcnet/go/services/aurora/internal/txsub"
-	"github.com/hcnet/go/support/app"
-	"github.com/hcnet/go/support/db"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/log"
+	"github.com/shantanu-hashcash/go/clients/hcnetcore"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/corestate"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/httpx"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ingest"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ledger"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/operationfeestats"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/paths"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/reap"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/txsub"
+	"github.com/shantanu-hashcash/go/support/app"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/log"
+	"github.com/shantanu-hashcash/go/support/logmetrics"
 )
 
 // App represents the root of the state of a aurora instance.
@@ -118,22 +119,6 @@ func (a *App) Serve() error {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	if a.config.UsingDefaultPubnetConfig {
-		const warnMsg = "Aurora started using the default pubnet configuration. " +
-			"This is not safe! Please provide a custom --captive-core-config-path."
-		log.Warn(warnMsg)
-		go func() {
-			for {
-				select {
-				case <-time.After(time.Hour):
-					log.Warn(warnMsg)
-				case <-a.done:
-					return
-				}
-			}
-		}()
-	}
-
 	go func() {
 		select {
 		case <-signalChan:
@@ -171,9 +156,15 @@ func (a *App) Close() {
 
 func (a *App) waitForDone() {
 	<-a.done
-	webShutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	a.webServer.Shutdown(webShutdownCtx)
+	a.Shutdown()
+}
+
+func (a *App) Shutdown() {
+	if a.webServer != nil {
+		webShutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		a.webServer.Shutdown(webShutdownCtx)
+	}
 	a.cancel()
 	if a.ingester != nil {
 		a.ingester.Shutdown()
@@ -212,11 +203,29 @@ func (a *App) Paths() paths.Finder {
 	return a.paths
 }
 
+func isLocalAddress(url string, port uint) bool {
+	localHostURL := fmt.Sprintf("http://localhost:%d", port)
+	localIPURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	return strings.HasPrefix(url, localHostURL) || strings.HasPrefix(url, localIPURL)
+}
+
 // UpdateCoreLedgerState triggers a refresh of Hcnet-Core ledger state.
 // This is done separately from Aurora ledger state update to prevent issues
 // in case Hcnet-Core query timeout.
 func (a *App) UpdateCoreLedgerState(ctx context.Context) {
 	var next ledger.CoreStatus
+
+	if a.config.HcnetCoreURL == "" {
+		return
+	}
+	// #4446 If the ingestion state machine is in the build state, the query can time out
+	// because the captive-core buffer may be full. In this case, skip the check.
+	if a.config.CaptiveCoreToml != nil &&
+		isLocalAddress(a.config.HcnetCoreURL, a.config.CaptiveCoreToml.HTTPPort) &&
+		a.ingester != nil && a.ingester.GetCurrentState() == ingest.Build {
+		return
+	}
 
 	logErr := func(err error, msg string) {
 		log.WithStack(err).WithField("err", err.Error()).Error(msg)
@@ -400,6 +409,14 @@ func (a *App) UpdateHcnetCoreInfo(ctx context.Context) error {
 		return nil
 	}
 
+	// #4446 If the ingestion state machine is in the build state, the query can time out
+	// because the captive-core buffer may be full. In this case, skip the check.
+	if a.config.CaptiveCoreToml != nil &&
+		isLocalAddress(a.config.HcnetCoreURL, a.config.CaptiveCoreToml.HTTPPort) &&
+		a.ingester != nil && a.ingester.GetCurrentState() == ingest.Build {
+		return nil
+	}
+
 	core := &hcnetcore.Client{
 		URL: a.config.HcnetCoreURL,
 	}
@@ -464,7 +481,8 @@ func (a *App) init() error {
 
 	// log
 	log.DefaultLogger.SetLevel(a.config.LogLevel)
-	log.DefaultLogger.AddHook(logmetrics.DefaultMetrics)
+	logMetrics := logmetrics.New("aurora")
+	log.DefaultLogger.AddHook(logMetrics)
 
 	// sentry
 	initSentry(a)
@@ -474,8 +492,8 @@ func (a *App) init() error {
 
 	// metrics and log.metrics
 	a.prometheusRegistry = prometheus.NewRegistry()
-	for _, meter := range *logmetrics.DefaultMetrics {
-		a.prometheusRegistry.MustRegister(meter)
+	for _, counter := range logMetrics {
+		a.prometheusRegistry.MustRegister(counter)
 	}
 
 	// hcnetCoreInfo
@@ -494,7 +512,11 @@ func (a *App) init() error {
 	initSubmissionSystem(a)
 
 	// reaper
-	a.reaper = reap.New(a.config.HistoryRetentionCount, a.AuroraSession(), a.ledgerState)
+	a.reaper = reap.New(
+		a.config.HistoryRetentionCount,
+		a.config.HistoryRetentionReapCount,
+		a.AuroraSession(),
+		a.ledgerState)
 
 	// go metrics
 	initGoMetrics(a)
@@ -520,6 +542,9 @@ func (a *App) init() error {
 		SSEUpdateFrequency:      a.config.SSEUpdateFrequency,
 		StaleThreshold:          a.config.StaleThreshold,
 		ConnectionTimeout:       a.config.ConnectionTimeout,
+		ClientQueryTimeout:      a.config.ClientQueryTimeout,
+		MaxConcurrentRequests:   a.config.MaxConcurrentRequests,
+		MaxHTTPRequestSize:      a.config.MaxHTTPRequestSize,
 		NetworkPassphrase:       a.config.NetworkPassphrase,
 		MaxPathLength:           a.config.MaxPathLength,
 		MaxAssetsPerPathRequest: a.config.MaxAssetsPerPathRequest,
@@ -528,6 +553,8 @@ func (a *App) init() error {
 		CoreGetter:              a,
 		AuroraVersion:          a.auroraVersion,
 		FriendbotURL:            a.config.FriendbotURL,
+		DisableTxSub:            a.config.DisableTxSub,
+		HcnetCoreURL:          a.config.HcnetCoreURL,
 		HealthCheck: healthCheck{
 			session: a.historyQ.SessionInterface,
 			ctx:     a.ctx,
@@ -537,7 +564,7 @@ func (a *App) init() error {
 			},
 			cache: newHealthCache(healthCacheTTL),
 		},
-		EnableIngestionFiltering: a.config.EnableIngestionFiltering,
+		SkipTxMeta: a.config.SkipTxmeta,
 	}
 
 	if a.primaryHistoryQ != nil {

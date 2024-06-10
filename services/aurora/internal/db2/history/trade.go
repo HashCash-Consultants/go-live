@@ -7,10 +7,10 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 
-	"github.com/hcnet/go/services/aurora/internal/db2"
-	"github.com/hcnet/go/support/db"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // PagingToken returns a cursor for this trade
@@ -348,7 +348,7 @@ func getCanonicalAssetOrder(
 
 type QTrades interface {
 	QCreateAccountsHistory
-	NewTradeBatchInsertBuilder(maxBatchSize int) TradeBatchInsertBuilder
+	NewTradeBatchInsertBuilder() TradeBatchInsertBuilder
 	RebuildTradeAggregationBuckets(ctx context.Context, fromledger, toLedger uint32, roundingSlippageFilter int) error
 	CreateAssets(ctx context.Context, assets []xdr.Asset, maxBatchSize int) (map[string]Asset, error)
 	CreateHistoryLiquidityPools(ctx context.Context, poolIDs []string, batchSize int) (map[string]int64, error)

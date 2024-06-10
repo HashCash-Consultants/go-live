@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hcnet/go/price"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/price"
+	"github.com/shantanu-hashcash/go/xdr"
 
-	"github.com/hcnet/go/keypair"
-	"github.com/hcnet/go/network"
-	auroraclient "github.com/hcnet/go/txnbuild/exampleauroraclient"
+	"github.com/shantanu-hashcash/go/keypair"
+	"github.com/shantanu-hashcash/go/network"
+	auroraclient "github.com/shantanu-hashcash/go/txnbuild/exampleauroraclient"
 )
 
 func ExampleInflation() {
@@ -760,7 +760,7 @@ func ExampleBuildChallengeTx() {
 	webAuthDomain := "webauthdomain.example.org"
 	timebound := time.Duration(5 * time.Minute)
 
-	tx, err := BuildChallengeTx(serverSignerSeed, clientAccountID, webAuthDomain, anchorName, network.TestNetworkPassphrase, timebound)
+	tx, err := BuildChallengeTx(serverSignerSeed, clientAccountID, webAuthDomain, anchorName, network.TestNetworkPassphrase, timebound, nil)
 	check(err)
 
 	txeBase64, err := tx.Base64()

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hcnet/go/amount"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/amount"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 var (
@@ -268,7 +268,7 @@ func BenchmarkLiquidityPoolExpectations(b *testing.B) {
 
 func createRandomAmounts(quantity int) []xdr.Int64 {
 	amounts := make([]xdr.Int64, quantity)
-	for i, _ := range amounts {
+	for i := range amounts {
 		amounts[i] = xdr.Int64(1 + rand.Int63n(math.MaxInt64-100))
 	}
 	return amounts

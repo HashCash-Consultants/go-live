@@ -2,7 +2,9 @@ package ledgerbackend
 
 import (
 	"io/ioutil"
+	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -199,7 +201,7 @@ func TestCaptiveCoreTomlValidation(t *testing.T) {
 		{
 			name:          "unexpected BUCKET_DIR_PATH",
 			appendPath:    filepath.Join("testdata", "appendix-with-bucket-dir-path.cfg"),
-			expectedError: "could not unmarshal captive core toml: setting BUCKET_DIR_PATH is disallowed, it can cause clashes between instances",
+			expectedError: "could not unmarshal captive core toml: setting BUCKET_DIR_PATH is disallowed for Captive Core, use CAPTIVE_CORE_STORAGE_PATH instead",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -217,16 +219,29 @@ func TestCaptiveCoreTomlValidation(t *testing.T) {
 	}
 }
 
+func checkTestingAboveProtocol19() bool {
+	str := os.Getenv("HORIZON_INTEGRATION_TESTS_CORE_MAX_SUPPORTED_PROTOCOL")
+	if str == "" {
+		return false
+	}
+	version, err := strconv.ParseUint(str, 10, 32)
+	if err != nil {
+		return false
+	}
+	return uint32(version) > 19
+}
+
 func TestGenerateConfig(t *testing.T) {
-	for _, testCase := range []struct {
-		name         string
-		appendPath   string
-		mode         hcnetCoreRunnerMode
-		expectedPath string
-		httpPort     *uint
-		peerPort     *uint
-		logPath      *string
-		useDB        bool
+	testCases := []struct {
+		name                           string
+		appendPath                     string
+		mode                           hcnetCoreRunnerMode
+		expectedPath                   string
+		httpPort                       *uint
+		peerPort                       *uint
+		logPath                        *string
+		useDB                          bool
+		enforceSorobanDiagnosticEvents bool
 	}{
 		{
 			name:         "offline config with no appendix",
@@ -300,19 +315,67 @@ func TestGenerateConfig(t *testing.T) {
 			httpPort:     newUint(6789),
 			peerPort:     newUint(12345),
 			logPath:      nil,
-		},
-	} {
+		}}
+	if checkTestingAboveProtocol19() {
+		testCases = append(testCases, []struct {
+			name                           string
+			appendPath                     string
+			mode                           hcnetCoreRunnerMode
+			expectedPath                   string
+			httpPort                       *uint
+			peerPort                       *uint
+			logPath                        *string
+			useDB                          bool
+			enforceSorobanDiagnosticEvents bool
+		}{
+			{
+				name:                           "offline config with enforce diagnostic events",
+				mode:                           hcnetCoreRunnerModeOffline,
+				expectedPath:                   filepath.Join("testdata", "expected-offline-enforce-diagnostic-events.cfg"),
+				logPath:                        nil,
+				enforceSorobanDiagnosticEvents: true,
+			},
+			{
+				name:                           "offline config disabling enforced diagnostic events",
+				mode:                           hcnetCoreRunnerModeOffline,
+				expectedPath:                   filepath.Join("testdata", "expected-offline-enforce-disabled-diagnostic-events.cfg"),
+				appendPath:                     filepath.Join("testdata", "appendix-disable-diagnostic-events.cfg"),
+				logPath:                        nil,
+				enforceSorobanDiagnosticEvents: true,
+			},
+			{
+				name:                           "online config with enforce diagnostic events",
+				mode:                           hcnetCoreRunnerModeOnline,
+				appendPath:                     filepath.Join("testdata", "sample-appendix.cfg"),
+				expectedPath:                   filepath.Join("testdata", "expected-online-with-no-http-port-diag-events.cfg"),
+				httpPort:                       nil,
+				peerPort:                       newUint(12345),
+				logPath:                        nil,
+				enforceSorobanDiagnosticEvents: true,
+			},
+			{
+				name:         "offline config with minimum persistent entry in appendix",
+				mode:         hcnetCoreRunnerModeOnline,
+				appendPath:   filepath.Join("testdata", "appendix-with-minimum-persistent-entry.cfg"),
+				expectedPath: filepath.Join("testdata", "expected-online-with-appendix-minimum-persistent-entry.cfg"),
+				logPath:      nil,
+			},
+		}...)
+	}
+
+	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			var err error
 			var captiveCoreToml *CaptiveCoreToml
 			params := CaptiveCoreTomlParams{
-				NetworkPassphrase:  "Public Global Hcnet Network ; September 2015",
-				HistoryArchiveURLs: []string{"http://localhost:1170"},
-				HTTPPort:           testCase.httpPort,
-				PeerPort:           testCase.peerPort,
-				LogPath:            testCase.logPath,
-				Strict:             false,
-				UseDB:              testCase.useDB,
+				NetworkPassphrase:              "Public Global Hcnet Network ; September 2015",
+				HistoryArchiveURLs:             []string{"http://localhost:1170"},
+				HTTPPort:                       testCase.httpPort,
+				PeerPort:                       testCase.peerPort,
+				LogPath:                        testCase.logPath,
+				Strict:                         false,
+				UseDB:                          testCase.useDB,
+				EnforceSorobanDiagnosticEvents: testCase.enforceSorobanDiagnosticEvents,
 			}
 			if testCase.appendPath != "" {
 				captiveCoreToml, err = NewCaptiveCoreTomlFromFile(testCase.appendPath, params)
@@ -329,6 +392,28 @@ func TestGenerateConfig(t *testing.T) {
 
 			assert.Equal(t, string(configBytes), string(expectedByte))
 		})
+	}
+}
+
+func TestHistoryArchiveURLTrailingSlash(t *testing.T) {
+	httpPort := uint(8000)
+	peerPort := uint(8000)
+	logPath := "logPath"
+
+	params := CaptiveCoreTomlParams{
+		NetworkPassphrase:  "Public Global Hcnet Network ; September 2015",
+		HistoryArchiveURLs: []string{"http://localhost:1170/"},
+		HTTPPort:           &httpPort,
+		PeerPort:           &peerPort,
+		LogPath:            &logPath,
+		Strict:             false,
+	}
+
+	captiveCoreToml, err := NewCaptiveCoreToml(params)
+	assert.NoError(t, err)
+	assert.Len(t, captiveCoreToml.HistoryEntries, 1)
+	for _, entry := range captiveCoreToml.HistoryEntries {
+		assert.Equal(t, "curl -sf http://localhost:1170/{0} -o {1}", entry.Get)
 	}
 }
 
@@ -414,4 +499,15 @@ func TestNonDBConfigDoesNotUpdateDatabase(t *testing.T) {
 	toml := CaptiveCoreToml{}
 	require.NoError(t, toml.unmarshal(configBytes, true))
 	assert.Equal(t, toml.Database, "")
+}
+
+func TestCheckCoreVersion(t *testing.T) {
+	coreBin := os.Getenv("HORIZON_INTEGRATION_TESTS_CAPTIVE_CORE_BIN")
+	if coreBin == "" {
+		t.SkipNow()
+		return
+	}
+	var cctoml CaptiveCoreToml
+	version := cctoml.checkCoreVersion(coreBin)
+	require.True(t, version.IsEqualOrAbove(19, 0))
 }

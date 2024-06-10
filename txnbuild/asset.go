@@ -3,8 +3,8 @@ package txnbuild
 import (
 	"bytes"
 
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // AssetType represents the type of a Hcnet asset.
@@ -212,4 +212,14 @@ func assetFromXDR(xAsset xdr.Asset) (Asset, error) {
 	}
 
 	return nil, errors.New("invalid asset")
+}
+
+// MustAssetFromXDR constructs an Asset from its xdr representation.
+// If the given asset xdr is invalid, MustAssetFromXDR will panic.
+func MustAssetFromXDR(xAsset xdr.Asset) Asset {
+	asset, err := assetFromXDR(xAsset)
+	if err != nil {
+		panic(err)
+	}
+	return asset
 }

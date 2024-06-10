@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/hcnet/go/ingest/ledgerbackend"
+	"github.com/shantanu-hashcash/go/ingest/ledgerbackend"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/throttled"
@@ -19,20 +19,16 @@ type Config struct {
 	Port               uint
 	AdminPort          uint
 
-	EnableCaptiveCoreIngestion  bool
-	EnableIngestionFiltering    bool
-	UsingDefaultPubnetConfig    bool
 	CaptiveCoreBinaryPath       string
-	RemoteCaptiveCoreURL        string
 	CaptiveCoreConfigPath       string
 	CaptiveCoreTomlParams       ledgerbackend.CaptiveCoreTomlParams
 	CaptiveCoreToml             *ledgerbackend.CaptiveCoreToml
 	CaptiveCoreStoragePath      string
 	CaptiveCoreReuseStoragePath bool
 	CaptiveCoreConfigUseDB      bool
+	HistoryArchiveCaching       bool
 
-	HcnetCoreDatabaseURL string
-	HcnetCoreURL         string
+	HcnetCoreURL string
 
 	// MaxDBConnections has a priority over all 4 values below.
 	MaxDBConnections            int
@@ -41,10 +37,14 @@ type Config struct {
 
 	SSEUpdateFrequency time.Duration
 	ConnectionTimeout  time.Duration
-	RateQuota          *throttled.RateQuota
-	FriendbotURL       *url.URL
-	LogLevel           logrus.Level
-	LogFile            string
+	ClientQueryTimeout time.Duration
+	// MaxHTTPRequestSize is the maximum allowed request payload size
+	MaxHTTPRequestSize    uint
+	RateQuota             *throttled.RateQuota
+	MaxConcurrentRequests uint
+	FriendbotURL          *url.URL
+	LogLevel              logrus.Level
+	LogFile               string
 
 	// MaxPathLength is the maximum length of the path returned by `/paths` endpoint.
 	MaxPathLength uint
@@ -69,26 +69,32 @@ type Config struct {
 	TLSKey string
 	// Ingest toggles whether this aurora instance should run the data ingestion subsystem.
 	Ingest bool
-	// CursorName is the cursor used for ingesting from hcnet-core.
-	// Setting multiple cursors in different Aurora instances allows multiple
-	// Auroras to ingest from the same hcnet-core instance without cursor
-	// collisions.
-	CursorName string
 	// HistoryRetentionCount represents the minimum number of ledgers worth of
 	// history data to retain in the aurora database. For the purposes of
 	// determining a "retention duration", each ledger roughly corresponds to 10
 	// seconds of real time.
 	HistoryRetentionCount uint
+	// HistoryRetentionReapCount is the number of ledgers worth of history data
+	// to remove per second from the Aurora database. It is intended to allow
+	// control over the amount of CPU and database load caused by reaping,
+	// especially if enabling reaping for the first time or in times of
+	// increased ledger load.
+	HistoryRetentionReapCount uint
 	// StaleThreshold represents the number of ledgers a history database may be
 	// out-of-date by before aurora begins to respond with an error to history
 	// requests.
 	StaleThreshold uint
-	// SkipCursorUpdate causes the ingestor to skip reporting the "last imported
-	// ledger" state to hcnet-core.
-	SkipCursorUpdate bool
 	// IngestDisableStateVerification disables state verification
 	// `System.verifyState()` when set to `true`.
 	IngestDisableStateVerification bool
+	// IngestStateVerificationCheckpointFrequency configures how often state verification is performed.
+	// If IngestStateVerificationCheckpointFrequency is set to 1 state verification is run on every checkpoint,
+	// If IngestStateVerificationCheckpointFrequency is set to 2 state verification is run on every second checkpoint,
+	// etc...
+	IngestStateVerificationCheckpointFrequency uint
+	// IngestStateVerificationTimeout configures a timeout on the state verification routine.
+	// If IngestStateVerificationTimeout is set to 0 the timeout is disabled.
+	IngestStateVerificationTimeout time.Duration
 	// IngestEnableExtendedLogLedgerStats enables extended ledger stats in
 	// logging.
 	IngestEnableExtendedLogLedgerStats bool
@@ -106,4 +112,10 @@ type Config struct {
 	BehindAWSLoadBalancer bool
 	// RoundingSlippageFilter excludes trades from /trade_aggregations with rounding slippage >x bps
 	RoundingSlippageFilter int
+	// Hcnet network: 'testnet' or 'pubnet'
+	Network string
+	// DisableTxSub disables transaction submission functionality for Aurora.
+	DisableTxSub bool
+	// SkipTxmeta, when enabled, will not store meta xdr in history transaction table
+	SkipTxmeta bool
 }

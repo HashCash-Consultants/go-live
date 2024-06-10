@@ -7,9 +7,9 @@ import (
 
 	"strings"
 
-	"github.com/hcnet/go/hash"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/hash"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 const (
@@ -17,6 +17,20 @@ const (
 	PublicNetworkPassphrase = "Public Global Hcnet Network ; September 2015"
 	// TestNetworkPassphrase is the pass phrase used for every transaction intended for the SDF-run test network
 	TestNetworkPassphrase = "Test SDF Network ; September 2015"
+	// FutureNetworkPassphrase is the pass phrase used for every transaction intended for the SDF-run future network
+	FutureNetworkPassphrase = "Test SDF Future Network ; October 2022"
+)
+
+var (
+	// PublicNetworkhistoryArchiveURLs is a list of history archive URLs for hcnet 'pubnet'
+	PublicNetworkhistoryArchiveURLs = []string{"https://history.hcnet.org/prd/core-live/core_live_001/",
+		"https://history.hcnet.org/prd/core-live/core_live_002/",
+		"https://history.hcnet.org/prd/core-live/core_live_003/"}
+
+	// TestNetworkhistoryArchiveURLs is a list of history archive URLs for hcnet 'testnet'
+	TestNetworkhistoryArchiveURLs = []string{"https://history.hcnet.org/prd/core-testnet/core_testnet_001/",
+		"https://history.hcnet.org/prd/core-testnet/core_testnet_002/",
+		"https://history.hcnet.org/prd/core-testnet/core_testnet_003"}
 )
 
 // ID returns the network ID derived from the provided passphrase.  This value

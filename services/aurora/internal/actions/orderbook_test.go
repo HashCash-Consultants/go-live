@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/test"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
 	"github.com/stretchr/testify/assert"
 
-	protocol "github.com/hcnet/go/protocols/aurora"
+	protocol "github.com/shantanu-hashcash/go/protocols/aurora"
 )
 
 type intObject int
@@ -577,7 +577,7 @@ func TestOrderbookGetResource(t *testing.T) {
 	assert.NoError(t, q.TruncateTables(tt.Ctx, []string{"offers"}))
 	assert.NoError(t, q.UpsertOffers(tt.Ctx, offers))
 
-	assert.NoError(t, q.BeginTx(&sql.TxOptions{
+	assert.NoError(t, q.BeginTx(tt.Ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
 		ReadOnly:  true,
 	}))

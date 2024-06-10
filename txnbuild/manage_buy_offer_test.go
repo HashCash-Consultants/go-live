@@ -3,8 +3,8 @@ package txnbuild
 import (
 	"testing"
 
-	"github.com/hcnet/go/price"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/price"
+	"github.com/shantanu-hashcash/go/xdr"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -179,7 +179,7 @@ func TestManageBuyOfferRoundtrip(t *testing.T) {
 		Price:         price.MustParse("0.01"),
 		OfferID:       0,
 	}
-	testOperationsMarshallingRoundtrip(t, []Operation{&manageBuyOffer}, false)
+	testOperationsMarshalingRoundtrip(t, []Operation{&manageBuyOffer}, false)
 
 	// with muxed accounts
 	manageBuyOffer = ManageBuyOffer{
@@ -190,5 +190,5 @@ func TestManageBuyOfferRoundtrip(t *testing.T) {
 		Price:         price.MustParse("0.01"),
 		OfferID:       0,
 	}
-	testOperationsMarshallingRoundtrip(t, []Operation{&manageBuyOffer}, true)
+	testOperationsMarshalingRoundtrip(t, []Operation{&manageBuyOffer}, true)
 }

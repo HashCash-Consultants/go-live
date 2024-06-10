@@ -5,21 +5,23 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/hcnet/go/clients/hcnetcore"
-	proto "github.com/hcnet/go/protocols/hcnetcore"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/log"
+	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/shantanu-hashcash/go/clients/hcnetcore"
+	proto "github.com/shantanu-hashcash/go/protocols/hcnetcore"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/log"
 )
 
 // NewDefaultSubmitter returns a new, simple Submitter implementation
 // that submits directly to the hcnet-core at `url` using the http client
 // `h`.
-func NewDefaultSubmitter(h *http.Client, url string) Submitter {
+func NewDefaultSubmitter(h *http.Client, url string, registry *prometheus.Registry) Submitter {
 	return &submitter{
-		HcnetCore: &hcnetcore.Client{
+		HcnetCore: hcnetcore.NewClientWithMetrics(hcnetcore.Client{
 			HTTP: h,
 			URL:  url,
-		},
+		}, registry, "txsub"),
 		Log: log.DefaultLogger.WithField("service", "txsub.submitter"),
 	}
 }
@@ -28,13 +30,13 @@ func NewDefaultSubmitter(h *http.Client, url string) Submitter {
 // submits directly to the configured hcnet-core instance using the
 // configured http client.
 type submitter struct {
-	HcnetCore *hcnetcore.Client
+	HcnetCore hcnetcore.ClientWithMetrics
 	Log         *log.Entry
 }
 
 // Submit sends the provided envelope to hcnet-core and parses the response into
 // a SubmissionResult
-func (sub *submitter) Submit(ctx context.Context, env string) (result SubmissionResult) {
+func (sub *submitter) Submit(ctx context.Context, rawTx string) (result SubmissionResult) {
 	start := time.Now()
 	defer func() {
 		result.Duration = time.Since(start)
@@ -44,7 +46,7 @@ func (sub *submitter) Submit(ctx context.Context, env string) (result Submission
 		}).Info("Submitter result")
 	}()
 
-	cresp, err := sub.HcnetCore.SubmitTransaction(ctx, env)
+	cresp, err := sub.HcnetCore.SubmitTx(ctx, rawTx)
 	if err != nil {
 		result.Err = errors.Wrap(err, "failed to submit")
 		return
@@ -58,7 +60,7 @@ func (sub *submitter) Submit(ctx context.Context, env string) (result Submission
 
 	switch cresp.Status {
 	case proto.TXStatusError:
-		result.Err = &FailedTransactionError{cresp.Error}
+		result.Err = &FailedTransactionError{cresp.Error, cresp.DiagnosticEvents}
 	case proto.TXStatusPending, proto.TXStatusDuplicate, proto.TXStatusTryAgainLater:
 		//noop.  A nil Err indicates success
 	default:

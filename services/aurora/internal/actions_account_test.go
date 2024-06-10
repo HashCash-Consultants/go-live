@@ -3,9 +3,9 @@ package aurora
 import (
 	"testing"
 
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/ingest"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ingest"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 func TestAccountActions_InvalidID(t *testing.T) {
@@ -18,12 +18,17 @@ func TestAccountActions_InvalidID(t *testing.T) {
 	ht.Assert.NoError(err)
 	err = q.UpdateIngestVersion(ht.Ctx, ingest.CurrentVersion)
 	ht.Assert.NoError(err)
-	_, err = q.InsertLedger(ht.Ctx, xdr.LedgerHeaderHistoryEntry{
+
+	ht.Assert.NoError(q.Begin(ht.Ctx))
+	ledgerBatch := q.NewLedgerBatchInsertBuilder()
+	err = ledgerBatch.Add(xdr.LedgerHeaderHistoryEntry{
 		Header: xdr.LedgerHeader{
 			LedgerSeq: 100,
 		},
 	}, 0, 0, 0, 0, 0)
 	ht.Assert.NoError(err)
+	ht.Assert.NoError(ledgerBatch.Exec(ht.Ctx, q))
+	ht.Assert.NoError(q.Commit())
 
 	// existing account
 	w := ht.Get(

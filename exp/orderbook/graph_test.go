@@ -8,9 +8,9 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/hcnet/go/keypair"
-	"github.com/hcnet/go/price"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/keypair"
+	"github.com/shantanu-hashcash/go/price"
+	"github.com/shantanu-hashcash/go/xdr"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -166,7 +166,7 @@ func assertGraphEquals(t *testing.T, a, b *OrderBookGraph) {
 	assert.Equalf(t, len(a.liquidityPools), len(b.liquidityPools),
 		"expected same # of liquidity pools but got %v %v", a, b)
 
-	for assetString, _ := range a.assetStringToID {
+	for assetString := range a.assetStringToID {
 		asset := a.assetStringToID[assetString]
 		otherAsset, ok := b.assetStringToID[assetString]
 		if !ok {
@@ -2298,7 +2298,7 @@ func TestInterleavedFixedPaths(t *testing.T) {
 
 func TestRepro(t *testing.T) {
 	// A reproduction of the bug report:
-	// https://github.com/hcnet/go/issues/4014
+	// https://github.com/shantanu-hashcash/go/issues/4014
 	usdc := xdr.MustNewCreditAsset("USDC", "GAEB3HSAWRVILER6T5NMX5VAPTK4PPO2BAL37HR2EOUIK567GJFEO437")
 	eurt := xdr.MustNewCreditAsset("EURT", "GABHG6C7YL2WA2ZJSONPD6ZBWLPAWKYDPYMK6BQRFLZXPQE7IBSTMPNN")
 

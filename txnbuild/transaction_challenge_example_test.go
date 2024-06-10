@@ -5,11 +5,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/hcnet/go/clients/auroraclient"
-	"github.com/hcnet/go/keypair"
-	"github.com/hcnet/go/network"
-	"github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/txnbuild"
+	"github.com/shantanu-hashcash/go/clients/auroraclient"
+	"github.com/shantanu-hashcash/go/keypair"
+	"github.com/shantanu-hashcash/go/network"
+	"github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/txnbuild"
 )
 
 var serverAccount, _ = keypair.ParseFull("SCDXPYDGKV5HOAGVZN3FQSS5FKUPP5BAVBWH4FXKTAWAC24AE4757JSI")
@@ -37,7 +37,7 @@ func ExampleVerifyChallengeTxThreshold() {
 	// Server builds challenge transaction
 	var challengeTx string
 	{
-		tx, err := txnbuild.BuildChallengeTx(serverAccount.Seed(), clientAccount.Address(), "webauthdomain.hcnet.org", "test", network.TestNetworkPassphrase, time.Minute)
+		tx, err := txnbuild.BuildChallengeTx(serverAccount.Seed(), clientAccount.Address(), "webauthdomain.hcnet.org", "test", network.TestNetworkPassphrase, time.Minute, nil)
 		if err != nil {
 			fmt.Println("Error:", err)
 			return
@@ -52,7 +52,7 @@ func ExampleVerifyChallengeTxThreshold() {
 	// Client reads and signs challenge transaction
 	var signedChallengeTx string
 	{
-		tx, txClientAccountID, _, err := txnbuild.ReadChallengeTx(challengeTx, serverAccount.Address(), network.TestNetworkPassphrase, "webauthdomain.hcnet.org", []string{"test"})
+		tx, txClientAccountID, _, _, err := txnbuild.ReadChallengeTx(challengeTx, serverAccount.Address(), network.TestNetworkPassphrase, "webauthdomain.hcnet.org", []string{"test"})
 		if err != nil {
 			fmt.Println("Error:", err)
 			return
@@ -75,9 +75,12 @@ func ExampleVerifyChallengeTxThreshold() {
 
 	// Server verifies signed challenge transaction
 	{
-		_, txClientAccountID, _, err := txnbuild.ReadChallengeTx(challengeTx, serverAccount.Address(), network.TestNetworkPassphrase, "webauthdomain.hcnet.org", []string{"test"})
+		_, txClientAccountID, _, memo, err := txnbuild.ReadChallengeTx(challengeTx, serverAccount.Address(), network.TestNetworkPassphrase, "webauthdomain.hcnet.org", []string{"test"})
 		if err != nil {
 			fmt.Println("Error:", err)
+			return
+		} else if memo != nil {
+			fmt.Println("Expected memo to be nil, got: ", memo)
 			return
 		}
 

@@ -3,7 +3,7 @@ package xdr_test
 import (
 	"testing"
 
-	. "github.com/hcnet/go/xdr"
+	. "github.com/shantanu-hashcash/go/xdr"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -472,6 +472,16 @@ func TestAssetLessThan(t *testing.T) {
 
 		assert.False(t, assetIssuerB.LessThan(assetIssuerA))
 		assert.False(t, assetIssuerB.LessThan(assetIssuerB))
+	})
+
+	t.Run("test if codes with upper-case letters are sorted before lower-case letters", func(t *testing.T) {
+		// All upper-case letters should come before any lower-case ones
+		assetA, err := NewCreditAsset("B", "GA7NLOF4EHWMJF6DBXXV2H6AYI7IHYWNFZR6R52BYBLY7TE5Q74AIDRA")
+		require.NoError(t, err)
+		assetB, err := NewCreditAsset("a", "GA7NLOF4EHWMJF6DBXXV2H6AYI7IHYWNFZR6R52BYBLY7TE5Q74AIDRA")
+		require.NoError(t, err)
+
+		assert.True(t, assetA.LessThan(assetB))
 	})
 }
 

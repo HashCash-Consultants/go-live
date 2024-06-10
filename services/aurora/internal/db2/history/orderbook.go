@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"math/big"
 
-	"github.com/hcnet/go/amount"
-	"github.com/hcnet/go/support/db"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/amount"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 type priceLevel struct {
@@ -117,7 +117,7 @@ func (q *Q) GetOrderBookSummary(ctx context.Context, sellingAsset, buyingAsset x
 	// we don't expect there to be any inconsistency between levels and offers because
 	// this function should only be invoked in a repeatable read transaction
 	if len(levels) != len(offers) {
-		return result, errors.Wrap(err, "price levels length does not match summaries length")
+		return result, errors.New("price levels length does not match summaries length")
 	}
 	for i, level := range levels {
 		sum := offers[i]
@@ -151,7 +151,7 @@ func (q *Q) GetOrderBookSummary(ctx context.Context, sellingAsset, buyingAsset x
 		} else if sum.Type == "bid" {
 			result.Bids = append(result.Bids, entry)
 		} else {
-			return result, errors.Wrap(err, "invalid offer type")
+			return result, errors.New("invalid offer type")
 		}
 	}
 

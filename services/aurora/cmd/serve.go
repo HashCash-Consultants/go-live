@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	aurora "github.com/hcnet/go/services/aurora/internal"
+	aurora "github.com/shantanu-hashcash/go/services/aurora/internal"
 )
 
 var serveCmd = &cobra.Command{
@@ -10,7 +10,7 @@ var serveCmd = &cobra.Command{
 	Short: "run aurora server",
 	Long:  "serve initializes then starts the aurora HTTP server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		app, err := aurora.NewAppFromFlags(config, flags)
+		app, err := aurora.NewAppFromFlags(globalConfig, globalFlags)
 		if err != nil {
 			return err
 		}

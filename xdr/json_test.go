@@ -6,8 +6,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/hcnet/go/gxdr"
-	"github.com/hcnet/go/randxdr"
+	"github.com/shantanu-hashcash/go/gxdr"
+	"github.com/shantanu-hashcash/go/randxdr"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -71,7 +71,7 @@ func TestRandClaimPredicateJSON(t *testing.T) {
 		gen.Next(
 			shape,
 			[]randxdr.Preset{
-				{randxdr.IsPtr, randxdr.SetPtr(true)},
+				{Selector: randxdr.IsPtr, Setter: randxdr.SetPtr(true)},
 			},
 		)
 		assert.NoError(t, gxdr.Convert(shape, cp))

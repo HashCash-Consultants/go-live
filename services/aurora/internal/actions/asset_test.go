@@ -7,13 +7,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/protocols/aurora/base"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/test"
-	"github.com/hcnet/go/support/render/hal"
-	"github.com/hcnet/go/support/render/problem"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/protocols/aurora/base"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
+	"github.com/shantanu-hashcash/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/support/render/problem"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 func TestAssetStatsValidation(t *testing.T) {
@@ -159,6 +159,8 @@ func TestAssetStats(t *testing.T) {
 		LiquidityPoolsAmount:    "0.0000020",
 		Amount:                  "0.0000001",
 		NumAccounts:             usdAssetStat.NumAccounts,
+		ContractsAmount:         "0.0000000",
+		ArchivedContractsAmount: "0.0000000",
 		Asset: base.Asset{
 			Type:   "credit_alphanum4",
 			Code:   usdAssetStat.AssetCode,
@@ -202,6 +204,8 @@ func TestAssetStats(t *testing.T) {
 		},
 		ClaimableBalancesAmount: "0.0000000",
 		LiquidityPoolsAmount:    "0.0000000",
+		ContractsAmount:         "0.0000000",
+		ArchivedContractsAmount: "0.0000000",
 		Amount:                  "0.0000023",
 		NumAccounts:             etherAssetStat.NumAccounts,
 		Asset: base.Asset{
@@ -248,6 +252,8 @@ func TestAssetStats(t *testing.T) {
 		ClaimableBalancesAmount: "0.0000000",
 		LiquidityPoolsAmount:    "0.0000000",
 		Amount:                  "0.0000001",
+		ContractsAmount:         "0.0000000",
+		ArchivedContractsAmount: "0.0000000",
 		NumAccounts:             otherUSDAssetStat.NumAccounts,
 		Asset: base.Asset{
 			Type:   "credit_alphanum4",
@@ -295,6 +301,8 @@ func TestAssetStats(t *testing.T) {
 		ClaimableBalancesAmount: "0.0000000",
 		LiquidityPoolsAmount:    "0.0000000",
 		Amount:                  "0.0000111",
+		ContractsAmount:         "0.0000000",
+		ArchivedContractsAmount: "0.0000000",
 		NumAccounts:             eurAssetStat.NumAccounts,
 		Asset: base.Asset{
 			Type:   "credit_alphanum4",
@@ -471,6 +479,8 @@ func TestAssetStatsIssuerDoesNotExist(t *testing.T) {
 		ClaimableBalancesAmount: "0.0000000",
 		LiquidityPoolsAmount:    "0.0000000",
 		Amount:                  "0.0000001",
+		ContractsAmount:         "0.0000000",
+		ArchivedContractsAmount: "0.0000000",
 		NumAccounts:             usdAssetStat.NumAccounts,
 		Asset: base.Asset{
 			Type:   "credit_alphanum4",

@@ -9,11 +9,12 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/guregu/null"
-	"github.com/hcnet/go/services/aurora/internal/db2"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/ordered"
-	"github.com/hcnet/go/toid"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/ordered"
+	"github.com/shantanu-hashcash/go/toid"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // LedgerBySequence loads the single ledger at `seq` into `dest`
@@ -90,27 +91,46 @@ func (q *LedgersQ) Select(ctx context.Context, dest interface{}) error {
 
 // QLedgers defines ingestion ledger related queries.
 type QLedgers interface {
-	InsertLedger(
-		ctx context.Context,
+	NewLedgerBatchInsertBuilder() LedgerBatchInsertBuilder
+}
+
+// LedgerBatchInsertBuilder is used to insert ledgers into the
+// history_ledgers table
+type LedgerBatchInsertBuilder interface {
+	Add(
 		ledger xdr.LedgerHeaderHistoryEntry,
 		successTxsCount int,
 		failedTxsCount int,
 		opCount int,
 		txSetOpCount int,
 		ingestVersion int,
-	) (int64, error)
+	) error
+	Exec(ctx context.Context, session db.SessionInterface) error
 }
 
-// InsertLedger creates a row in the history_ledgers table.
-// Returns number of rows affected and error.
-func (q *Q) InsertLedger(ctx context.Context,
+// ledgerBatchInsertBuilder is a simple wrapper around db.BatchInsertBuilder
+type ledgerBatchInsertBuilder struct {
+	builder db.FastBatchInsertBuilder
+	table   string
+}
+
+// NewLedgerBatchInsertBuilder constructs a new EffectBatchInsertBuilder instance
+func (q *Q) NewLedgerBatchInsertBuilder() LedgerBatchInsertBuilder {
+	return &ledgerBatchInsertBuilder{
+		table:   "history_ledgers",
+		builder: db.FastBatchInsertBuilder{},
+	}
+}
+
+// Add adds a effect to the batch
+func (i *ledgerBatchInsertBuilder) Add(
 	ledger xdr.LedgerHeaderHistoryEntry,
 	successTxsCount int,
 	failedTxsCount int,
 	opCount int,
 	txSetOpCount int,
 	ingestVersion int,
-) (int64, error) {
+) error {
 	m, err := ledgerHeaderToMap(
 		ledger,
 		successTxsCount,
@@ -120,16 +140,14 @@ func (q *Q) InsertLedger(ctx context.Context,
 		ingestVersion,
 	)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	sql := sq.Insert("history_ledgers").SetMap(m)
-	result, err := q.Exec(ctx, sql)
-	if err != nil {
-		return 0, err
-	}
+	return i.builder.Row(m)
+}
 
-	return result.RowsAffected()
+func (i *ledgerBatchInsertBuilder) Exec(ctx context.Context, session db.SessionInterface) error {
+	return i.builder.Exec(ctx, session, i.table)
 }
 
 // GetLedgerGaps obtains ingestion gaps in the history_ledgers table.

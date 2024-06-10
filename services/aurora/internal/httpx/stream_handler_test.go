@@ -13,13 +13,14 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi"
+	"github.com/stretchr/testify/mock"
 
-	"github.com/hcnet/go/services/aurora/internal/actions"
-	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
-	"github.com/hcnet/go/services/aurora/internal/ledger"
-	"github.com/hcnet/go/services/aurora/internal/render/sse"
-	"github.com/hcnet/go/support/db"
-	"github.com/hcnet/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/actions"
+	auroraContext "github.com/shantanu-hashcash/go/services/aurora/internal/context"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ledger"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/render/sse"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/render/hal"
 )
 
 type testingFactory struct {
@@ -477,13 +478,13 @@ func TestRepeatableReadStream(t *testing.T) {
 		}
 
 		session := &db.MockSession{}
-		session.On("BeginTx", &sql.TxOptions{
+		session.On("BeginTx", mock.AnythingOfType("*context.cancelCtx"), &sql.TxOptions{
 			Isolation: sql.LevelRepeatableRead,
 			ReadOnly:  true,
 		}).Return(nil).Once()
 		session.On("Rollback").Return(nil).Once()
 
-		session.On("BeginTx", &sql.TxOptions{
+		session.On("BeginTx", mock.AnythingOfType("*context.cancelCtx"), &sql.TxOptions{
 			Isolation: sql.LevelRepeatableRead,
 			ReadOnly:  true,
 		}).Return(nil).Once()
@@ -516,13 +517,13 @@ func TestRepeatableReadStream(t *testing.T) {
 		}
 
 		session := &db.MockSession{}
-		session.On("BeginTx", &sql.TxOptions{
+		session.On("BeginTx", mock.AnythingOfType("*context.cancelCtx"), &sql.TxOptions{
 			Isolation: sql.LevelRepeatableRead,
 			ReadOnly:  true,
 		}).Return(nil).Once()
 		session.On("Rollback").Return(nil).Once()
 
-		session.On("BeginTx", &sql.TxOptions{
+		session.On("BeginTx", mock.AnythingOfType("*context.cancelCtx"), &sql.TxOptions{
 			Isolation: sql.LevelRepeatableRead,
 			ReadOnly:  true,
 		}).Return(nil).Once()

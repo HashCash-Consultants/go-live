@@ -3,12 +3,12 @@ package resourceadapter
 import (
 	"context"
 
-	"github.com/hcnet/go/protocols/aurora/base"
-	"github.com/hcnet/go/protocols/aurora/effects"
-	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/support/render/hal"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/protocols/aurora/base"
+	"github.com/shantanu-hashcash/go/protocols/aurora/effects"
+	auroraContext "github.com/shantanu-hashcash/go/services/aurora/internal/context"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 var EffectTypeNames = map[history.EffectType]string{
@@ -64,6 +64,8 @@ var EffectTypeNames = map[history.EffectType]string{
 	history.EffectLiquidityPoolCreated:               "liquidity_pool_created",
 	history.EffectLiquidityPoolRemoved:               "liquidity_pool_removed",
 	history.EffectLiquidityPoolRevoked:               "liquidity_pool_revoked",
+	history.EffectContractCredited:                   "contract_credited",
+	history.EffectContractDebited:                    "contract_debited",
 }
 
 // NewEffect creates a new effect resource from the provided database representation
@@ -279,6 +281,14 @@ func NewEffect(
 		result = e
 	case history.EffectLiquidityPoolRevoked:
 		e := effects.LiquidityPoolRevoked{Base: basev}
+		err = row.UnmarshalDetails(&e)
+		result = e
+	case history.EffectContractCredited:
+		e := effects.ContractCredited{Base: basev}
+		err = row.UnmarshalDetails(&e)
+		result = e
+	case history.EffectContractDebited:
+		e := effects.ContractDebited{Base: basev}
 		err = row.UnmarshalDetails(&e)
 		result = e
 	case history.EffectAccountRemoved:

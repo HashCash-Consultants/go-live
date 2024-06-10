@@ -5,15 +5,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hcnet/go/clients/auroraclient"
-	"github.com/hcnet/go/keypair"
-	protocol "github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/protocols/aurora/effects"
-	"github.com/hcnet/go/protocols/aurora/operations"
-	"github.com/hcnet/go/services/aurora/internal/codes"
-	"github.com/hcnet/go/services/aurora/internal/test/integration"
-	"github.com/hcnet/go/txnbuild"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/clients/auroraclient"
+	"github.com/shantanu-hashcash/go/keypair"
+	protocol "github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/protocols/aurora/effects"
+	"github.com/shantanu-hashcash/go/protocols/aurora/operations"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/codes"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test/integration"
+	"github.com/shantanu-hashcash/go/txnbuild"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 func TestHappyClawbackAccount(t *testing.T) {
@@ -23,7 +23,7 @@ func TestHappyClawbackAccount(t *testing.T) {
 
 	asset, fromKey, _ := setupClawbackAccountTest(tt, itest, master)
 
-	// Clawback all of the asset
+	// Clawback all the asset
 	submissionResp := itest.MustSubmitOperations(itest.MasterAccount(), master, &txnbuild.Clawback{
 		From:   fromKey.Address(),
 		Amount: "10",
@@ -93,7 +93,7 @@ func TestHappyClawbackAccountSellingLiabilities(t *testing.T) {
 		Buying:        txnbuild.NativeAsset{},
 		Selling:       asset,
 		Amount:        "5",
-		Price:         xdr.Price{1, 1},
+		Price:         xdr.Price{N: 1, D: 1},
 		SourceAccount: fromAccount.GetAccountID(),
 	})
 	tt.True(submissionResp.Successful)
@@ -148,7 +148,7 @@ func TestSadClawbackAccountSufficientFundsSellingLiabilities(t *testing.T) {
 		Buying:        txnbuild.NativeAsset{},
 		Selling:       asset,
 		Amount:        "5",
-		Price:         xdr.Price{1, 1},
+		Price:         xdr.Price{N: 1, D: 1},
 		SourceAccount: fromAccount.GetAccountID(),
 	})
 

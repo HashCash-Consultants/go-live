@@ -3,11 +3,11 @@ package main
 import (
 	"testing"
 
-	hProtocol "github.com/hcnet/go/protocols/aurora"
+	hProtocol "github.com/shantanu-hashcash/go/protocols/aurora"
 	"github.com/stretchr/testify/assert"
 )
 
-var badAmtOrders = []hProtocol.PriceLevel{hProtocol.PriceLevel{
+var badAmtOrders = []hProtocol.PriceLevel{{
 	PriceR: hProtocol.Price{
 		N: 4,
 		D: 2,

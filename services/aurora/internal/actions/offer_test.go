@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/guregu/null"
-	"github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/test"
-	"github.com/hcnet/go/support/render/hal"
-	"github.com/hcnet/go/support/render/problem"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
+	"github.com/shantanu-hashcash/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/support/render/problem"
+	"github.com/shantanu-hashcash/go/xdr"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -79,7 +79,9 @@ func TestGetOfferByIDHandler(t *testing.T) {
 	handler := GetOfferByID{}
 
 	ledgerCloseTime := time.Now().Unix()
-	_, err := q.InsertLedger(tt.Ctx, xdr.LedgerHeaderHistoryEntry{
+	assert.NoError(t, q.Begin(tt.Ctx))
+	ledgerBatch := q.NewLedgerBatchInsertBuilder()
+	err := ledgerBatch.Add(xdr.LedgerHeaderHistoryEntry{
 		Header: xdr.LedgerHeader{
 			LedgerSeq: 3,
 			ScpValue: xdr.HcnetValue{
@@ -87,7 +89,9 @@ func TestGetOfferByIDHandler(t *testing.T) {
 			},
 		},
 	}, 0, 0, 0, 0, 0)
-	tt.Assert.NoError(err)
+	assert.NoError(t, err)
+	assert.NoError(t, ledgerBatch.Exec(tt.Ctx, q))
+	assert.NoError(t, q.Commit())
 
 	err = q.UpsertOffers(tt.Ctx, []history.Offer{eurOffer, usdOffer})
 	tt.Assert.NoError(err)
@@ -186,7 +190,9 @@ func TestGetOffersHandler(t *testing.T) {
 	handler := GetOffersHandler{}
 
 	ledgerCloseTime := time.Now().Unix()
-	_, err := q.InsertLedger(tt.Ctx, xdr.LedgerHeaderHistoryEntry{
+	assert.NoError(t, q.Begin(tt.Ctx))
+	ledgerBatch := q.NewLedgerBatchInsertBuilder()
+	err := ledgerBatch.Add(xdr.LedgerHeaderHistoryEntry{
 		Header: xdr.LedgerHeader{
 			LedgerSeq: 3,
 			ScpValue: xdr.HcnetValue{
@@ -194,7 +200,9 @@ func TestGetOffersHandler(t *testing.T) {
 			},
 		},
 	}, 0, 0, 0, 0, 0)
-	tt.Assert.NoError(err)
+	assert.NoError(t, err)
+	assert.NoError(t, ledgerBatch.Exec(tt.Ctx, q))
+	assert.NoError(t, q.Commit())
 
 	err = q.UpsertOffers(tt.Ctx, []history.Offer{eurOffer, twoEurOffer, usdOffer})
 	tt.Assert.NoError(err)

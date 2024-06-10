@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hcnet/go/support/clock"
-	"github.com/hcnet/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/clock"
+	"github.com/shantanu-hashcash/go/support/errors"
 )
 
 // decodeResponse decodes the response from a request to a aurora server
@@ -27,7 +27,10 @@ func decodeResponse(resp *http.Response, object interface{}, auroraUrl string, c
 	}
 	setCurrentServerTime(u.Hostname(), resp.Header["Date"], clock)
 
-	if !(resp.StatusCode >= 200 && resp.StatusCode < 300) {
+	// While this part of code assumes that any error < 200 or error >= 300 is a Aurora problem, it is not
+	// true for the response from /transactions_async endpoint which does give these codes for certain responses
+	// from core.
+	if !(resp.StatusCode >= 200 && resp.StatusCode < 300) && (resp.Request == nil || resp.Request.URL == nil || resp.Request.URL.Path != "/transactions_async") {
 		auroraError := &Error{
 			Response: resp,
 		}
@@ -140,9 +143,9 @@ func setCurrentServerTime(host string, serverDate []string, clock *clock.Clock) 
 // currentServerTime returns the current server time for a given aurora server
 func currentServerTime(host string, currentTimeUTC int64) int64 {
 	serverTimeMapMutex.Lock()
-	st := ServerTimeMap[host]
+	st, has := ServerTimeMap[host]
 	serverTimeMapMutex.Unlock()
-	if &st == nil {
+	if !has {
 		return 0
 	}
 

@@ -3,7 +3,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -11,19 +10,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/hcnet/go/clients/auroraclient"
-	"github.com/hcnet/go/historyarchive"
-	"github.com/hcnet/go/keypair"
-	auroracmd "github.com/hcnet/go/services/aurora/cmd"
-	aurora "github.com/hcnet/go/services/aurora/internal"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/db2/schema"
-	"github.com/hcnet/go/services/aurora/internal/test/integration"
-	"github.com/hcnet/go/support/collections/set"
-	"github.com/hcnet/go/support/db"
-	"github.com/hcnet/go/support/db/dbtest"
-	"github.com/hcnet/go/txnbuild"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/clients/auroraclient"
+	"github.com/shantanu-hashcash/go/historyarchive"
+	"github.com/shantanu-hashcash/go/ingest/ledgerbackend"
+	"github.com/shantanu-hashcash/go/keypair"
+	hProtocol "github.com/shantanu-hashcash/go/protocols/aurora"
+	auroracmd "github.com/shantanu-hashcash/go/services/aurora/cmd"
+	aurora "github.com/shantanu-hashcash/go/services/aurora/internal"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/schema"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ingest/filters"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test/integration"
+	"github.com/shantanu-hashcash/go/support/collections/set"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/db/dbtest"
+	"github.com/shantanu-hashcash/go/txnbuild"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 func submitLiquidityPoolOps(itest *integration.Test, tt *assert.Assertions) (submittedOperations []txnbuild.Operation, lastLedger int32) {
@@ -79,8 +81,8 @@ func submitLiquidityPoolOps(itest *integration.Test, tt *assert.Assertions) (sub
 		LiquidityPoolID: [32]byte(poolID),
 		MaxAmountA:      "400",
 		MaxAmountB:      "777",
-		MinPrice:        xdr.Price{1, 2},
-		MaxPrice:        xdr.Price{2, 1},
+		MinPrice:        xdr.Price{N: 1, D: 2},
+		MaxPrice:        xdr.Price{N: 2, D: 1},
 	}
 	allOps = append(allOps, op)
 	itest.MustSubmitOperations(shareAccount, shareKeys, op)
@@ -160,6 +162,25 @@ func submitPaymentOps(itest *integration.Test, tt *assert.Assertions) (submitted
 	txResp := itest.MustSubmitOperations(itest.MasterAccount(), itest.Master(), ops...)
 
 	return ops, txResp.Ledger
+}
+
+//lint:ignore U1000 Ignore unused function temporarily until fees/preflight are working in test
+func submitSorobanOps(itest *integration.Test, tt *assert.Assertions) (submittedOperations []txnbuild.Operation, lastLedger int32) {
+	installContractOp := assembleInstallContractCodeOp(itest.CurrentTest(), itest.Master().Address(), add_u64_contract)
+	itest.MustSubmitOperations(itest.MasterAccount(), itest.Master(), installContractOp)
+
+	extendFootprintTtlOp := &txnbuild.ExtendFootprintTtl{
+		ExtendTo:      100,
+		SourceAccount: itest.Master().Address(),
+	}
+	itest.MustSubmitOperations(itest.MasterAccount(), itest.Master(), extendFootprintTtlOp)
+
+	restoreFootprintOp := &txnbuild.RestoreFootprint{
+		SourceAccount: itest.Master().Address(),
+	}
+	txResp := itest.MustSubmitOperations(itest.MasterAccount(), itest.Master(), restoreFootprintOp)
+
+	return []txnbuild.Operation{installContractOp, extendFootprintTtlOp, restoreFootprintOp}, txResp.Ledger
 }
 
 func submitSponsorshipOps(itest *integration.Test, tt *assert.Assertions) (submittedOperations []txnbuild.Operation, lastLedger int32) {
@@ -313,21 +334,21 @@ func submitOfferAndTrustlineOps(itest *integration.Test, tt *assert.Assertions) 
 			Selling: txnbuild.NativeAsset{},
 			Buying:  pesetasAsset,
 			Amount:  "10",
-			Price:   xdr.Price{1, 1},
+			Price:   xdr.Price{N: 1, D: 1},
 			OfferID: 0,
 		},
 		&txnbuild.ManageBuyOffer{
 			Selling: txnbuild.NativeAsset{},
 			Buying:  pesetasAsset,
 			Amount:  "10",
-			Price:   xdr.Price{1, 1},
+			Price:   xdr.Price{N: 1, D: 1},
 			OfferID: 0,
 		},
 		&txnbuild.CreatePassiveSellOffer{
 			Selling: txnbuild.NativeAsset{},
 			Buying:  pesetasAsset,
 			Amount:  "10",
-			Price:   xdr.Price{1, 1},
+			Price:   xdr.Price{N: 1, D: 1},
 		},
 	}
 	allOps := ops
@@ -396,33 +417,51 @@ func submitAccountOps(itest *integration.Test, tt *assert.Assertions) (submitted
 	return allOps, txResp.Ledger
 }
 
-func initializeDBIntegrationTest(t *testing.T) (itest *integration.Test, reachedLedger int32) {
-	itest = integration.NewTest(t, integration.Config{})
+func initializeDBIntegrationTest(t *testing.T) (*integration.Test, int32) {
+	itest := integration.NewTest(t, integration.Config{
+		AuroraIngestParameters: map[string]string{
+			"admin-port": strconv.Itoa(6000),
+		}})
 	tt := assert.New(t)
-
-	// submit all possible operations
-	ops, _ := submitAccountOps(itest, tt)
-	submittedOps := ops
-	ops, _ = submitPaymentOps(itest, tt)
-	submittedOps = append(submittedOps, ops...)
-	ops, _ = submitOfferAndTrustlineOps(itest, tt)
-	submittedOps = append(submittedOps, ops...)
-	ops, _ = submitSponsorshipOps(itest, tt)
-	submittedOps = append(submittedOps, ops...)
-	ops, _ = submitClaimableBalanceOps(itest, tt)
-	submittedOps = append(submittedOps, ops...)
-	ops, _ = submitClawbackOps(itest, tt)
-	submittedOps = append(submittedOps, ops...)
-	ops, reachedLedger = submitLiquidityPoolOps(itest, tt)
-	submittedOps = append(submittedOps, ops...)
 
 	// Make sure all possible operations are covered by reingestion
 	allOpTypes := set.Set[xdr.OperationType]{}
 	for typ := range xdr.OperationTypeToStringMap {
 		allOpTypes.Add(xdr.OperationType(typ))
 	}
+
+	submitters := []func(*integration.Test, *assert.Assertions) ([]txnbuild.Operation, int32){
+		submitAccountOps,
+		submitPaymentOps,
+		submitOfferAndTrustlineOps,
+		submitSponsorshipOps,
+		submitClaimableBalanceOps,
+		submitClawbackOps,
+		submitLiquidityPoolOps,
+	}
+
+	// TODO - re-enable invoke host function 'submitSorobanOps' test
+	// once fees/footprint from preflight are working in test
+	if false && integration.GetCoreMaxSupportedProtocol() > 19 {
+		submitters = append(submitters, submitSorobanOps)
+	} else {
+		delete(allOpTypes, xdr.OperationTypeInvokeHostFunction)
+		delete(allOpTypes, xdr.OperationTypeExtendFootprintTtl)
+		delete(allOpTypes, xdr.OperationTypeRestoreFootprint)
+	}
+
 	// Inflation is not supported
 	delete(allOpTypes, xdr.OperationTypeInflation)
+
+	var submittedOps []txnbuild.Operation
+	var ledgerOfLastSubmittedTx int32
+	// submit all possible operations
+	for i, f := range submitters {
+		var ops []txnbuild.Operation
+		ops, ledgerOfLastSubmittedTx = f(itest, tt)
+		t.Logf("%v ledgerOfLastSubmittedTx %v", i, ledgerOfLastSubmittedTx)
+		submittedOps = append(submittedOps, ops...)
+	}
 
 	for _, op := range submittedOps {
 		opXDR, err := op.BuildXDR()
@@ -431,11 +470,14 @@ func initializeDBIntegrationTest(t *testing.T) (itest *integration.Test, reached
 	}
 	tt.Empty(allOpTypes)
 
-	root, err := itest.Client().Root()
-	tt.NoError(err)
-	tt.LessOrEqual(reachedLedger, root.AuroraSequence)
+	reachedLedger := func() bool {
+		root, err := itest.Client().Root()
+		tt.NoError(err)
+		return root.AuroraSequence >= ledgerOfLastSubmittedTx
+	}
+	tt.Eventually(reachedLedger, 15*time.Second, 5*time.Second)
 
-	return
+	return itest, ledgerOfLastSubmittedTx
 }
 
 func TestReingestDB(t *testing.T) {
@@ -444,7 +486,7 @@ func TestReingestDB(t *testing.T) {
 
 	auroraConfig := itest.GetAuroraIngestConfig()
 	t.Run("validate parallel range", func(t *testing.T) {
-		auroracmd.RootCmd.SetArgs(command(auroraConfig,
+		auroracmd.RootCmd.SetArgs(command(t, auroraConfig,
 			"db",
 			"reingest",
 			"range",
@@ -456,20 +498,27 @@ func TestReingestDB(t *testing.T) {
 		assert.EqualError(t, auroracmd.RootCmd.Execute(), "Invalid range: {10 2} from > to")
 	})
 
-	// cap reachedLedger to the nearest checkpoint ledger because reingest range cannot ingest past the most
-	// recent checkpoint ledger when using captive core
+	t.Logf("reached ledger is %v", reachedLedger)
+	// cap reachedLedger to the nearest checkpoint ledger because reingest range
+	// cannot ingest past the most recent checkpoint ledger when using captive
+	// core
 	toLedger := uint32(reachedLedger)
-	archive, err := historyarchive.Connect(auroraConfig.HistoryArchiveURLs[0], historyarchive.ConnectOptions{
-		NetworkPassphrase:   auroraConfig.NetworkPassphrase,
-		CheckpointFrequency: auroraConfig.CheckpointFrequency,
-	})
+	archive, err := historyarchive.Connect(
+		auroraConfig.HistoryArchiveURLs[0],
+		historyarchive.ArchiveOptions{
+			NetworkPassphrase:   auroraConfig.NetworkPassphrase,
+			CheckpointFrequency: auroraConfig.CheckpointFrequency,
+		})
 	tt.NoError(err)
 
 	// make sure a full checkpoint has elapsed otherwise there will be nothing to reingest
 	var latestCheckpoint uint32
 	publishedFirstCheckpoint := func() bool {
 		has, requestErr := archive.GetRootHAS()
-		tt.NoError(requestErr)
+		if requestErr != nil {
+			t.Logf("request to fetch checkpoint failed: %v", requestErr)
+			return false
+		}
 		latestCheckpoint = has.CurrentLedger
 		return latestCheckpoint > 1
 	}
@@ -486,10 +535,10 @@ func TestReingestDB(t *testing.T) {
 
 	auroraConfig.CaptiveCoreConfigPath = filepath.Join(
 		filepath.Dir(auroraConfig.CaptiveCoreConfigPath),
-		"captive-core-reingest-range-integration-tests.cfg",
+		getCoreConfigFile(itest),
 	)
 
-	auroracmd.RootCmd.SetArgs(command(auroraConfig, "db",
+	auroracmd.RootCmd.SetArgs(command(t, auroraConfig, "db",
 		"reingest",
 		"range",
 		"--parallel-workers=1",
@@ -501,7 +550,168 @@ func TestReingestDB(t *testing.T) {
 	tt.NoError(auroracmd.RootCmd.Execute(), "Repeat the same reingest range against db, should not have errors.")
 }
 
-func command(auroraConfig aurora.Config, args ...string) []string {
+func TestReingestDBWithFilterRules(t *testing.T) {
+	itest, _ := initializeDBIntegrationTest(t)
+	tt := assert.New(t)
+
+	archive, err := historyarchive.Connect(
+		itest.GetAuroraIngestConfig().HistoryArchiveURLs[0],
+		historyarchive.ArchiveOptions{
+			NetworkPassphrase:   itest.GetAuroraIngestConfig().NetworkPassphrase,
+			CheckpointFrequency: itest.GetAuroraIngestConfig().CheckpointFrequency,
+		})
+	tt.NoError(err)
+
+	// make sure one full checkpoint has elapsed before making ledger entries
+	// as test can't reap before first checkpoint in general later in test
+	publishedFirstCheckpoint := func() bool {
+		has, requestErr := archive.GetRootHAS()
+		if requestErr != nil {
+			t.Logf("request to fetch checkpoint failed: %v", requestErr)
+			return false
+		}
+		return has.CurrentLedger > 1
+	}
+	tt.Eventually(publishedFirstCheckpoint, 10*time.Second, time.Second)
+
+	fullKeys, accounts := itest.CreateAccounts(2, "10000")
+	whitelistedAccount := accounts[0]
+	whitelistedAccountKey := fullKeys[0]
+	nonWhitelistedAccount := accounts[1]
+	nonWhitelistedAccountKey := fullKeys[1]
+	enabled := true
+
+	// all assets are allowed by default because the asset filter config is empty.
+	defaultAllowedAsset := txnbuild.CreditAsset{Code: "PTS", Issuer: itest.Master().Address()}
+	itest.MustEstablishTrustline(whitelistedAccountKey, whitelistedAccount, defaultAllowedAsset)
+	itest.MustEstablishTrustline(nonWhitelistedAccountKey, nonWhitelistedAccount, defaultAllowedAsset)
+
+	// Setup a whitelisted account rule, force refresh of filter configs to be quick
+	filters.SetFilterConfigCheckIntervalSeconds(1)
+
+	expectedAccountFilter := hProtocol.AccountFilterConfig{
+		Whitelist: []string{whitelistedAccount.GetAccountID()},
+		Enabled:   &enabled,
+	}
+	err = itest.AdminClient().SetIngestionAccountFilter(expectedAccountFilter)
+	tt.NoError(err)
+
+	accountFilter, err := itest.AdminClient().GetIngestionAccountFilter()
+	tt.NoError(err)
+
+	tt.ElementsMatch(expectedAccountFilter.Whitelist, accountFilter.Whitelist)
+	tt.Equal(expectedAccountFilter.Enabled, accountFilter.Enabled)
+
+	// Ensure the latest filter configs are reloaded by the ingestion state machine processor
+	time.Sleep(time.Duration(filters.GetFilterConfigCheckIntervalSeconds()) * time.Second)
+
+	// Make sure that when using a non-whitelisted account, the transaction is not stored
+	nonWhiteListTxResp := itest.MustSubmitOperations(itest.MasterAccount(), itest.Master(),
+		&txnbuild.Payment{
+			Destination: nonWhitelistedAccount.GetAccountID(),
+			Amount:      "10",
+			Asset:       defaultAllowedAsset,
+		},
+	)
+	_, err = itest.Client().TransactionDetail(nonWhiteListTxResp.Hash)
+	tt.True(auroraclient.IsNotFoundError(err))
+
+	// Make sure that when using a whitelisted account, the transaction is stored
+	whiteListTxResp := itest.MustSubmitOperations(itest.MasterAccount(), itest.Master(),
+		&txnbuild.Payment{
+			Destination: whitelistedAccount.GetAccountID(),
+			Amount:      "10",
+			Asset:       defaultAllowedAsset,
+		},
+	)
+	lastTx, err := itest.Client().TransactionDetail(whiteListTxResp.Hash)
+	tt.NoError(err)
+
+	reachedLedger := uint32(lastTx.Ledger)
+
+	t.Logf("reached ledger is %v", reachedLedger)
+
+	// make sure a checkpoint has elapsed to lock in the chagnes made on network for reingest later
+	var latestCheckpoint uint32
+	publishedNextCheckpoint := func() bool {
+		has, requestErr := archive.GetRootHAS()
+		if requestErr != nil {
+			t.Logf("request to fetch checkpoint failed: %v", requestErr)
+			return false
+		}
+		latestCheckpoint = has.CurrentLedger
+		return latestCheckpoint > reachedLedger
+	}
+	tt.Eventually(publishedNextCheckpoint, 10*time.Second, time.Second)
+
+	// to test reingestion, stop aurora web and captive core,
+	// it was used to create ledger entries for test.
+	itest.StopAurora()
+
+	// clear the db with reaping all ledgers
+	auroracmd.RootCmd.SetArgs(command(t, itest.GetAuroraIngestConfig(), "db",
+		"reap",
+		"--history-retention-count=1",
+	))
+	tt.NoError(auroracmd.RootCmd.Execute())
+
+	// repopulate the db with reingestion which should catchup using core reapply filter rules
+	// correctly on reingestion ranged
+	auroracmd.RootCmd.SetArgs(command(t, itest.GetAuroraIngestConfig(), "db",
+		"reingest",
+		"range",
+		"1",
+		fmt.Sprintf("%d", reachedLedger),
+	))
+
+	tt.NoError(auroracmd.RootCmd.Execute())
+
+	// bring up aurora, just the api server no ingestion, to query
+	// for tx's that should have been repopulated on db from reingestion per
+	// filter rule expectations
+	webApp, err := aurora.NewApp(itest.GetAuroraWebConfig())
+	tt.NoError(err)
+
+	webAppDone := make(chan struct{})
+	go func() {
+		webApp.Serve()
+		close(webAppDone)
+	}()
+
+	// wait until the web server is up before continuing to test requests
+	itest.WaitForAurora()
+
+	// Make sure that a tx from non-whitelisted account is not stored after reingestion
+	_, err = itest.Client().TransactionDetail(nonWhiteListTxResp.Hash)
+	tt.True(auroraclient.IsNotFoundError(err))
+
+	// Make sure that a tx from whitelisted account is stored after reingestion
+	_, err = itest.Client().TransactionDetail(whiteListTxResp.Hash)
+	tt.NoError(err)
+
+	// tell the aurora web server to shutdown
+	webApp.Close()
+
+	// wait for aurora to finish shutdown
+	tt.Eventually(func() bool {
+		select {
+		case <-webAppDone:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Second)
+}
+
+func getCoreConfigFile(itest *integration.Test) string {
+	coreConfigFile := "captive-core-reingest-range-classic-integration-tests.cfg"
+	if itest.Config().ProtocolVersion >= ledgerbackend.MinimalSorobanProtocolSupport {
+		coreConfigFile = "captive-core-reingest-range-integration-tests.cfg"
+	}
+	return coreConfigFile
+}
+
+func command(t *testing.T, auroraConfig aurora.Config, args ...string) []string {
 	return append([]string{
 		"--hcnet-core-url",
 		auroraConfig.HcnetCoreURL,
@@ -509,15 +719,12 @@ func command(auroraConfig aurora.Config, args ...string) []string {
 		auroraConfig.HistoryArchiveURLs[0],
 		"--db-url",
 		auroraConfig.DatabaseURL,
-		"--hcnet-core-db-url",
-		auroraConfig.HcnetCoreDatabaseURL,
 		"--hcnet-core-binary-path",
 		auroraConfig.CaptiveCoreBinaryPath,
 		"--captive-core-config-path",
 		auroraConfig.CaptiveCoreConfigPath,
 		"--captive-core-use-db=" +
 			strconv.FormatBool(auroraConfig.CaptiveCoreConfigUseDB),
-		"--enable-captive-core-ingestion=" + strconv.FormatBool(auroraConfig.EnableCaptiveCoreIngestion),
 		"--network-passphrase",
 		auroraConfig.NetworkPassphrase,
 		// due to ARTIFICIALLY_ACCELERATE_TIME_FOR_TESTING
@@ -525,7 +732,7 @@ func command(auroraConfig aurora.Config, args ...string) []string {
 		"8",
 		// Create the storage directory outside of the source repo,
 		// otherwise it will break Golang test caching.
-		"--captive-core-storage-path=" + os.TempDir(),
+		"--captive-core-storage-path=" + t.TempDir(),
 	}, args...)
 }
 
@@ -583,7 +790,7 @@ func TestFillGaps(t *testing.T) {
 	// Initialize the DB schema
 	dbConn, err := db.Open("postgres", freshAuroraPostgresURL)
 	tt.NoError(err)
-	historyQ := history.Q{dbConn}
+	historyQ := history.Q{SessionInterface: dbConn}
 	defer func() {
 		historyQ.Close()
 		newDB.Close()
@@ -595,14 +802,16 @@ func TestFillGaps(t *testing.T) {
 	// cap reachedLedger to the nearest checkpoint ledger because reingest range cannot ingest past the most
 	// recent checkpoint ledger when using captive core
 	toLedger := uint32(reachedLedger)
-	archive, err := historyarchive.Connect(auroraConfig.HistoryArchiveURLs[0], historyarchive.ConnectOptions{
-		NetworkPassphrase:   auroraConfig.NetworkPassphrase,
-		CheckpointFrequency: auroraConfig.CheckpointFrequency,
-	})
+	archive, err := historyarchive.Connect(
+		auroraConfig.HistoryArchiveURLs[0],
+		historyarchive.ArchiveOptions{
+			NetworkPassphrase:   auroraConfig.NetworkPassphrase,
+			CheckpointFrequency: auroraConfig.CheckpointFrequency,
+		})
 	tt.NoError(err)
 
 	t.Run("validate parallel range", func(t *testing.T) {
-		auroracmd.RootCmd.SetArgs(command(auroraConfig,
+		auroracmd.RootCmd.SetArgs(command(t, auroraConfig,
 			"db",
 			"fill-gaps",
 			"--parallel-workers=2",
@@ -639,22 +848,22 @@ func TestFillGaps(t *testing.T) {
 
 	auroraConfig.CaptiveCoreConfigPath = filepath.Join(
 		filepath.Dir(auroraConfig.CaptiveCoreConfigPath),
-		"captive-core-reingest-range-integration-tests.cfg",
+		getCoreConfigFile(itest),
 	)
-	auroracmd.RootCmd.SetArgs(command(auroraConfig, "db", "fill-gaps", "--parallel-workers=1"))
+	auroracmd.RootCmd.SetArgs(command(t, auroraConfig, "db", "fill-gaps", "--parallel-workers=1"))
 	tt.NoError(auroracmd.RootCmd.Execute())
 
 	tt.NoError(historyQ.LatestLedger(context.Background(), &latestLedger))
 	tt.Equal(int64(0), latestLedger)
 
-	auroracmd.RootCmd.SetArgs(command(auroraConfig, "db", "fill-gaps", "3", "4"))
+	auroracmd.RootCmd.SetArgs(command(t, auroraConfig, "db", "fill-gaps", "3", "4"))
 	tt.NoError(auroracmd.RootCmd.Execute())
 	tt.NoError(historyQ.LatestLedger(context.Background(), &latestLedger))
 	tt.NoError(historyQ.ElderLedger(context.Background(), &oldestLedger))
 	tt.Equal(int64(3), oldestLedger)
 	tt.Equal(int64(4), latestLedger)
 
-	auroracmd.RootCmd.SetArgs(command(auroraConfig, "db", "fill-gaps", "6", "7"))
+	auroracmd.RootCmd.SetArgs(command(t, auroraConfig, "db", "fill-gaps", "6", "7"))
 	tt.NoError(auroracmd.RootCmd.Execute())
 	tt.NoError(historyQ.LatestLedger(context.Background(), &latestLedger))
 	tt.NoError(historyQ.ElderLedger(context.Background(), &oldestLedger))
@@ -665,7 +874,7 @@ func TestFillGaps(t *testing.T) {
 	tt.NoError(err)
 	tt.Equal([]history.LedgerRange{{StartSequence: 5, EndSequence: 5}}, gaps)
 
-	auroracmd.RootCmd.SetArgs(command(auroraConfig, "db", "fill-gaps"))
+	auroracmd.RootCmd.SetArgs(command(t, auroraConfig, "db", "fill-gaps"))
 	tt.NoError(auroracmd.RootCmd.Execute())
 	tt.NoError(historyQ.LatestLedger(context.Background(), &latestLedger))
 	tt.NoError(historyQ.ElderLedger(context.Background(), &oldestLedger))
@@ -675,7 +884,7 @@ func TestFillGaps(t *testing.T) {
 	tt.NoError(err)
 	tt.Empty(gaps)
 
-	auroracmd.RootCmd.SetArgs(command(auroraConfig, "db", "fill-gaps", "2", "8"))
+	auroracmd.RootCmd.SetArgs(command(t, auroraConfig, "db", "fill-gaps", "2", "8"))
 	tt.NoError(auroracmd.RootCmd.Execute())
 	tt.NoError(historyQ.LatestLedger(context.Background(), &latestLedger))
 	tt.NoError(historyQ.ElderLedger(context.Background(), &oldestLedger))

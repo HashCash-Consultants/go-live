@@ -5,17 +5,17 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/hcnet/go/services/aurora/internal/actions"
-	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
-	"github.com/hcnet/go/services/aurora/internal/ledger"
-	"github.com/hcnet/go/services/aurora/internal/render"
-	hProblem "github.com/hcnet/go/services/aurora/internal/render/problem"
-	"github.com/hcnet/go/services/aurora/internal/render/sse"
-	"github.com/hcnet/go/support/db"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/render/hal"
-	"github.com/hcnet/go/support/render/httpjson"
-	"github.com/hcnet/go/support/render/problem"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/actions"
+	auroraContext "github.com/shantanu-hashcash/go/services/aurora/internal/context"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ledger"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/render"
+	hProblem "github.com/shantanu-hashcash/go/services/aurora/internal/render/problem"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/render/sse"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/support/render/httpjson"
+	"github.com/shantanu-hashcash/go/support/render/problem"
 )
 
 type objectAction interface {
@@ -23,6 +23,10 @@ type objectAction interface {
 		w actions.HeaderWriter,
 		r *http.Request,
 	) (interface{}, error)
+}
+
+type HttpResponse interface {
+	GetStatus() int
 }
 
 type ObjectActionHandler struct {
@@ -41,8 +45,13 @@ func (handler ObjectActionHandler) ServeHTTP(
 			return
 		}
 
-		httpjson.Render(
+		statusCode := http.StatusOK
+		if httpResponse, ok := response.(HttpResponse); ok {
+			statusCode = httpResponse.GetStatus()
+		}
+		httpjson.RenderStatus(
 			w,
+			statusCode,
 			response,
 			httpjson.HALJSON,
 		)
@@ -104,7 +113,7 @@ func repeatableReadStream(
 
 	return func() ([]sse.Event, error) {
 		if session != nil {
-			err := session.BeginTx(&sql.TxOptions{
+			err := session.BeginTx(r.Context(), &sql.TxOptions{
 				Isolation: sql.LevelRepeatableRead,
 				ReadOnly:  true,
 			})

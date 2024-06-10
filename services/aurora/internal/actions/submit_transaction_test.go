@@ -9,15 +9,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hcnet/go/network"
-	"github.com/hcnet/go/services/aurora/internal/corestate"
-	hProblem "github.com/hcnet/go/services/aurora/internal/render/problem"
-	"github.com/hcnet/go/services/aurora/internal/txsub"
-	"github.com/hcnet/go/support/render/problem"
-	"github.com/hcnet/go/xdr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/shantanu-hashcash/go/network"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/corestate"
+	hProblem "github.com/shantanu-hashcash/go/services/aurora/internal/render/problem"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/txsub"
+	"github.com/shantanu-hashcash/go/support/render/problem"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 func TestHcnetCoreMalformedTx(t *testing.T) {
@@ -152,4 +153,94 @@ func TestClientDisconnectSubmission(t *testing.T) {
 	w := httptest.NewRecorder()
 	_, err = handler.GetResource(w, request)
 	assert.Equal(t, hProblem.ClientDisconnected, err)
+}
+
+func TestDisableTxSubFlagSubmission(t *testing.T) {
+	mockSubmitChannel := make(chan txsub.Result)
+
+	mock := &coreStateGetterMock{}
+	mock.On("GetCoreState").Return(corestate.State{
+		Synced: true,
+	})
+
+	mockSubmitter := &networkSubmitterMock{}
+	mockSubmitter.On("Submit").Return(mockSubmitChannel)
+
+	handler := SubmitTransactionHandler{
+		Submitter:         mockSubmitter,
+		NetworkPassphrase: network.PublicNetworkPassphrase,
+		DisableTxSub:      true,
+		CoreStateGetter:   mock,
+	}
+
+	form := url.Values{}
+
+	var p = &problem.P{
+		Type:   "transaction_submission_disabled",
+		Title:  "Transaction Submission Disabled",
+		Status: http.StatusForbidden,
+		Detail: "Transaction submission has been disabled for Aurora. " +
+			"To enable it again, remove env variable DISABLE_TX_SUB.",
+		Extras: map[string]interface{}{},
+	}
+
+	request, err := http.NewRequest(
+		"POST",
+		"https://aurora.hcnet.org/transactions",
+		strings.NewReader(form.Encode()),
+	)
+
+	require.NoError(t, err)
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	ctx, cancel := context.WithCancel(request.Context())
+	cancel()
+	request = request.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	_, err = handler.GetResource(w, request)
+	assert.Equal(t, p, err)
+}
+
+func TestSubmissionSorobanDiagnosticEvents(t *testing.T) {
+	mockSubmitChannel := make(chan txsub.Result, 1)
+	mock := &coreStateGetterMock{}
+	mock.On("GetCoreState").Return(corestate.State{
+		Synced: true,
+	})
+
+	mockSubmitter := &networkSubmitterMock{}
+	mockSubmitter.On("Submit").Return(mockSubmitChannel)
+	mockSubmitChannel <- txsub.Result{
+		Err: &txsub.FailedTransactionError{
+			ResultXDR:           "AAAAAAABCdf////vAAAAAA==",
+			DiagnosticEventsXDR: "AAAAAQAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAA8AAAAFZXJyb3IAAAAAAAACAAAAAwAAAAUAAAAQAAAAAQAAAAMAAAAOAAAAU3RyYW5zYWN0aW9uIGBzb3JvYmFuRGF0YS5yZXNvdXJjZUZlZWAgaXMgbG93ZXIgdGhhbiB0aGUgYWN0dWFsIFNvcm9iYW4gcmVzb3VyY2UgZmVlAAAAAAUAAAAAAAEJcwAAAAUAAAAAAAG6fA==",
+		},
+	}
+
+	handler := SubmitTransactionHandler{
+		Submitter:         mockSubmitter,
+		NetworkPassphrase: network.PublicNetworkPassphrase,
+		CoreStateGetter:   mock,
+	}
+
+	form := url.Values{}
+	form.Set("tx", "AAAAAAGUcmKO5465JxTSLQOQljwk2SfqAJmZSG6JH6wtqpwhAAABLAAAAAAAAAABAAAAAAAAAAEAAAALaGVsbG8gd29ybGQAAAAAAwAAAAAAAAAAAAAAABbxCy3mLg3hiTqX4VUEEp60pFOrJNxYM1JtxXTwXhY2AAAAAAvrwgAAAAAAAAAAAQAAAAAW8Qst5i4N4Yk6l+FVBBKetKRTqyTcWDNSbcV08F4WNgAAAAAN4Lazj4x61AAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABLaqcIQAAAEBKwqWy3TaOxoGnfm9eUjfTRBvPf34dvDA0Nf+B8z4zBob90UXtuCqmQqwMCyH+okOI3c05br3khkH0yP4kCwcE")
+
+	request, err := http.NewRequest(
+		"POST",
+		"https://aurora.hcnet.org/transactions",
+		strings.NewReader(form.Encode()),
+	)
+
+	require.NoError(t, err)
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	w := httptest.NewRecorder()
+	_, err = handler.GetResource(w, request)
+	require.Error(t, err)
+	require.IsType(t, &problem.P{}, err)
+	require.Contains(t, err.(*problem.P).Extras, "diagnostic_events")
+	require.IsType(t, []string{}, err.(*problem.P).Extras["diagnostic_events"])
+	diagnosticEvents := err.(*problem.P).Extras["diagnostic_events"].([]string)
+	require.Equal(t, diagnosticEvents, []string{"AAAAAAAAAAAAAAAAAAAAAgAAAAAAAAACAAAADwAAAAVlcnJvcgAAAAAAAAIAAAADAAAABQAAABAAAAABAAAAAwAAAA4AAABTdHJhbnNhY3Rpb24gYHNvcm9iYW5EYXRhLnJlc291cmNlRmVlYCBpcyBsb3dlciB0aGFuIHRoZSBhY3R1YWwgU29yb2JhbiByZXNvdXJjZSBmZWUAAAAABQAAAAAAAQlzAAAABQAAAAAAAbp8"})
 }

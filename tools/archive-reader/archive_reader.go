@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 
-	"github.com/hcnet/go/historyarchive"
-	"github.com/hcnet/go/ingest"
+	"github.com/shantanu-hashcash/go/historyarchive"
+	"github.com/shantanu-hashcash/go/ingest"
+	"github.com/shantanu-hashcash/go/support/storage"
 )
 
 func main() {
@@ -63,11 +63,13 @@ func main() {
 
 func archive() (*historyarchive.Archive, error) {
 	return historyarchive.Connect(
-		fmt.Sprintf("s3://history.hcnet.org/prd/core-live/core_live_001/"),
-		historyarchive.ConnectOptions{
-			S3Region:         "eu-west-1",
-			UnsignedRequests: true,
-			UserAgent:        "archive-reader",
+		"s3://history.hcnet.org/prd/core-live/core_live_001/",
+		historyarchive.ArchiveOptions{
+			ConnectOptions: storage.ConnectOptions{
+				S3Region:         "eu-west-1",
+				UserAgent:        "archive-reader",
+				UnsignedRequests: true,
+			},
 		},
 	)
 }

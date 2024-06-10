@@ -5,41 +5,47 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/guregu/null"
-	"github.com/hcnet/go/amount"
-	"github.com/hcnet/go/ingest"
-	"github.com/hcnet/go/protocols/aurora/base"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/toid"
-	"github.com/hcnet/go/xdr"
+
+	"github.com/shantanu-hashcash/go/amount"
+	"github.com/shantanu-hashcash/go/ingest"
+	"github.com/shantanu-hashcash/go/protocols/aurora/base"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/support/contractevents"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/toid"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // OperationProcessor operations processor
 type OperationProcessor struct {
-	operationsQ history.QOperations
-
-	sequence uint32
-	batch    history.OperationBatchInsertBuilder
+	batch   history.OperationBatchInsertBuilder
+	network string
 }
 
-func NewOperationProcessor(operationsQ history.QOperations, sequence uint32) *OperationProcessor {
+func NewOperationProcessor(batch history.OperationBatchInsertBuilder, network string) *OperationProcessor {
 	return &OperationProcessor{
-		operationsQ: operationsQ,
-		sequence:    sequence,
-		batch:       operationsQ.NewOperationBatchInsertBuilder(maxBatchSize),
+		batch:   batch,
+		network: network,
 	}
 }
 
+func (p *OperationProcessor) Name() string {
+	return "processors.OperationProcessor"
+}
+
 // ProcessTransaction process the given transaction
-func (p *OperationProcessor) ProcessTransaction(ctx context.Context, transaction ingest.LedgerTransaction) error {
+func (p *OperationProcessor) ProcessTransaction(lcm xdr.LedgerCloseMeta, transaction ingest.LedgerTransaction) error {
 	for i, op := range transaction.Envelope.Operations() {
 		operation := transactionOperationWrapper{
 			index:          uint32(i),
 			transaction:    transaction,
 			operation:      op,
-			ledgerSequence: p.sequence,
+			ledgerSequence: lcm.LedgerSequence(),
+			network:        p.network,
 		}
 		details, err := operation.Details()
 		if err != nil {
@@ -57,7 +63,7 @@ func (p *OperationProcessor) ProcessTransaction(ctx context.Context, transaction
 		if source.Type == xdr.CryptoKeyTypeKeyTypeMuxedEd25519 {
 			sourceAccountMuxed = null.StringFrom(source.Address())
 		}
-		if err := p.batch.Add(ctx,
+		if err := p.batch.Add(
 			operation.ID(),
 			operation.TransactionID(),
 			operation.Order(),
@@ -65,6 +71,7 @@ func (p *OperationProcessor) ProcessTransaction(ctx context.Context, transaction
 			detailsJSON,
 			acID.Address(),
 			sourceAccountMuxed,
+			operation.IsPayment(),
 		); err != nil {
 			return errors.Wrap(err, "Error batch inserting operation rows")
 		}
@@ -73,8 +80,8 @@ func (p *OperationProcessor) ProcessTransaction(ctx context.Context, transaction
 	return nil
 }
 
-func (p *OperationProcessor) Commit(ctx context.Context) error {
-	return p.batch.Exec(ctx)
+func (p *OperationProcessor) Flush(ctx context.Context, session db.SessionInterface) error {
+	return p.batch.Exec(ctx, session)
 }
 
 // transactionOperationWrapper represents the data for a single operation within a transaction
@@ -83,6 +90,7 @@ type transactionOperationWrapper struct {
 	transaction    ingest.LedgerTransaction
 	operation      xdr.Operation
 	ledgerSequence uint32
+	network        string
 }
 
 // ID returns the ID for the operation.
@@ -248,6 +256,45 @@ func (operation *transactionOperationWrapper) OperationResult() *xdr.OperationRe
 	return &tr
 }
 
+// Determines if an operation is qualified to represent a payment in aurora terms.
+func (operation *transactionOperationWrapper) IsPayment() bool {
+	switch operation.OperationType() {
+	case xdr.OperationTypeCreateAccount:
+		return true
+	case xdr.OperationTypePayment:
+		return true
+	case xdr.OperationTypePathPaymentStrictReceive:
+		return true
+	case xdr.OperationTypePathPaymentStrictSend:
+		return true
+	case xdr.OperationTypeAccountMerge:
+		return true
+	case xdr.OperationTypeInvokeHostFunction:
+		diagnosticEvents, err := operation.transaction.GetDiagnosticEvents()
+		if err != nil {
+			return false
+		}
+		// scan all the contract events for at least one SAC event, qualified to be a payment
+		// in aurora
+		for _, contractEvent := range filterEvents(diagnosticEvents) {
+			if sacEvent, err := contractevents.NewHcnetAssetContractEvent(&contractEvent, operation.network); err == nil {
+				switch sacEvent.GetType() {
+				case contractevents.EventTypeTransfer:
+					return true
+				case contractevents.EventTypeMint:
+					return true
+				case contractevents.EventTypeClawback:
+					return true
+				case contractevents.EventTypeBurn:
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
 func (operation *transactionOperationWrapper) findInitatingBeginSponsoringOp() *transactionOperationWrapper {
 	if !operation.transaction.Result.Successful() {
 		// Failed transactions may not have a compliant sandwich structure
@@ -275,7 +322,7 @@ func addAccountAndMuxedAccountDetails(result map[string]interface{}, a xdr.Muxed
 	if a.Type == xdr.CryptoKeyTypeKeyTypeMuxedEd25519 {
 		result[prefix+"_muxed"] = a.Address()
 		// _muxed_id fields should had ideally been stored in the DB as a string instead of uint64
-		// due to Javascript not being able to handle them, see https://github.com/hcnet/go/issues/3714
+		// due to Javascript not being able to handle them, see https://github.com/shantanu-hashcash/go/issues/3714
 		// However, we released this code in the wild before correcting it. Thus, what we do is
 		// work around it (by preprocessing it into a string) in Operation.UnmarshalDetails()
 		result[prefix+"_muxed_id"] = uint64(a.Med25519.Id)
@@ -297,7 +344,9 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 		addAccountAndMuxedAccountDetails(details, *source, "from")
 		addAccountAndMuxedAccountDetails(details, op.Destination, "to")
 		details["amount"] = amount.String(op.Amount)
-		addAssetDetails(details, op.Asset, "")
+		if err := addAssetDetails(details, op.Asset, ""); err != nil {
+			return nil, err
+		}
 	case xdr.OperationTypePathPaymentStrictReceive:
 		op := operation.operation.Body.MustPathPaymentStrictReceiveOp()
 		addAccountAndMuxedAccountDetails(details, *source, "from")
@@ -306,8 +355,12 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 		details["amount"] = amount.String(op.DestAmount)
 		details["source_amount"] = amount.String(0)
 		details["source_max"] = amount.String(op.SendMax)
-		addAssetDetails(details, op.DestAsset, "")
-		addAssetDetails(details, op.SendAsset, "source_")
+		if err := addAssetDetails(details, op.DestAsset, ""); err != nil {
+			return nil, err
+		}
+		if err := addAssetDetails(details, op.SendAsset, "source_"); err != nil {
+			return nil, err
+		}
 
 		if operation.transaction.Result.Successful() {
 			result := operation.OperationResult().MustPathPaymentStrictReceiveResult()
@@ -317,7 +370,9 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 		var path = make([]map[string]interface{}, len(op.Path))
 		for i := range op.Path {
 			path[i] = make(map[string]interface{})
-			addAssetDetails(path[i], op.Path[i], "")
+			if err := addAssetDetails(path[i], op.Path[i], ""); err != nil {
+				return nil, err
+			}
 		}
 		details["path"] = path
 
@@ -329,8 +384,12 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 		details["amount"] = amount.String(0)
 		details["source_amount"] = amount.String(op.SendAmount)
 		details["destination_min"] = amount.String(op.DestMin)
-		addAssetDetails(details, op.DestAsset, "")
-		addAssetDetails(details, op.SendAsset, "source_")
+		if err := addAssetDetails(details, op.DestAsset, ""); err != nil {
+			return nil, err
+		}
+		if err := addAssetDetails(details, op.SendAsset, "source_"); err != nil {
+			return nil, err
+		}
 
 		if operation.transaction.Result.Successful() {
 			result := operation.OperationResult().MustPathPaymentStrictSendResult()
@@ -340,7 +399,9 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 		var path = make([]map[string]interface{}, len(op.Path))
 		for i := range op.Path {
 			path[i] = make(map[string]interface{})
-			addAssetDetails(path[i], op.Path[i], "")
+			if err := addAssetDetails(path[i], op.Path[i], ""); err != nil {
+				return nil, err
+			}
 		}
 		details["path"] = path
 	case xdr.OperationTypeManageBuyOffer:
@@ -352,8 +413,12 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 			"n": op.Price.N,
 			"d": op.Price.D,
 		}
-		addAssetDetails(details, op.Buying, "buying_")
-		addAssetDetails(details, op.Selling, "selling_")
+		if err := addAssetDetails(details, op.Buying, "buying_"); err != nil {
+			return nil, err
+		}
+		if err := addAssetDetails(details, op.Selling, "selling_"); err != nil {
+			return nil, err
+		}
 	case xdr.OperationTypeManageSellOffer:
 		op := operation.operation.Body.MustManageSellOfferOp()
 		details["offer_id"] = op.OfferId
@@ -363,8 +428,12 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 			"n": op.Price.N,
 			"d": op.Price.D,
 		}
-		addAssetDetails(details, op.Buying, "buying_")
-		addAssetDetails(details, op.Selling, "selling_")
+		if err := addAssetDetails(details, op.Buying, "buying_"); err != nil {
+			return nil, err
+		}
+		if err := addAssetDetails(details, op.Selling, "selling_"); err != nil {
+			return nil, err
+		}
 	case xdr.OperationTypeCreatePassiveSellOffer:
 		op := operation.operation.Body.MustCreatePassiveSellOfferOp()
 		details["amount"] = amount.String(op.Amount)
@@ -373,8 +442,12 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 			"n": op.Price.N,
 			"d": op.Price.D,
 		}
-		addAssetDetails(details, op.Buying, "buying_")
-		addAssetDetails(details, op.Selling, "selling_")
+		if err := addAssetDetails(details, op.Buying, "buying_"); err != nil {
+			return nil, err
+		}
+		if err := addAssetDetails(details, op.Selling, "selling_"); err != nil {
+			return nil, err
+		}
 	case xdr.OperationTypeSetOptions:
 		op := operation.operation.Body.MustSetOptionsOp()
 
@@ -421,14 +494,18 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 				return nil, err
 			}
 		} else {
-			addAssetDetails(details, op.Line.ToAsset(), "")
+			if err := addAssetDetails(details, op.Line.ToAsset(), ""); err != nil {
+				return nil, err
+			}
 			details["trustee"] = details["asset_issuer"]
 		}
 		addAccountAndMuxedAccountDetails(details, *source, "trustor")
 		details["limit"] = amount.String(op.Limit)
 	case xdr.OperationTypeAllowTrust:
 		op := operation.operation.Body.MustAllowTrustOp()
-		addAssetDetails(details, op.Asset.ToAsset(source.ToAccountId()), "")
+		if err := addAssetDetails(details, op.Asset.ToAsset(source.ToAccountId()), ""); err != nil {
+			return nil, err
+		}
 		addAccountAndMuxedAccountDetails(details, *source, "trustee")
 		details["trustor"] = op.Trustor.Address()
 		details["authorize"] = xdr.TrustLineFlags(op.Authorize).IsAuthorized()
@@ -499,7 +576,9 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 		}
 	case xdr.OperationTypeClawback:
 		op := operation.operation.Body.MustClawbackOp()
-		addAssetDetails(details, op.Asset, "")
+		if err := addAssetDetails(details, op.Asset, ""); err != nil {
+			return nil, err
+		}
 		addAccountAndMuxedAccountDetails(details, op.From, "from")
 		details["amount"] = amount.String(op.Amount)
 	case xdr.OperationTypeClawbackClaimableBalance:
@@ -512,7 +591,9 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 	case xdr.OperationTypeSetTrustLineFlags:
 		op := operation.operation.Body.MustSetTrustLineFlagsOp()
 		details["trustor"] = op.Trustor.Address()
-		addAssetDetails(details, op.Asset, "")
+		if err := addAssetDetails(details, op.Asset, ""); err != nil {
+			return nil, err
+		}
 		if op.SetFlags > 0 {
 			addTrustLineFlagDetails(details, xdr.TrustLineFlags(op.SetFlags), "set")
 		}
@@ -584,9 +665,68 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 			{Asset: assetA, Amount: amount.String(receivedA)},
 			{Asset: assetB, Amount: amount.String(receivedB)},
 		}
+	case xdr.OperationTypeInvokeHostFunction:
+		op := operation.operation.Body.MustInvokeHostFunctionOp()
+		details["function"] = op.HostFunction.Type.String()
 
+		switch op.HostFunction.Type {
+		case xdr.HostFunctionTypeHostFunctionTypeInvokeContract:
+			invokeArgs := op.HostFunction.MustInvokeContract()
+			args := make([]xdr.ScVal, 0, len(invokeArgs.Args)+2)
+			args = append(args, xdr.ScVal{Type: xdr.ScValTypeScvAddress, Address: &invokeArgs.ContractAddress})
+			args = append(args, xdr.ScVal{Type: xdr.ScValTypeScvSymbol, Sym: &invokeArgs.FunctionName})
+			args = append(args, invokeArgs.Args...)
+			params := make([]map[string]string, 0, len(args))
+
+			for _, param := range args {
+				serializedParam := map[string]string{}
+				serializedParam["value"] = "n/a"
+				serializedParam["type"] = "n/a"
+
+				if scValTypeName, ok := param.ArmForSwitch(int32(param.Type)); ok {
+					serializedParam["type"] = scValTypeName
+					if raw, err := param.MarshalBinary(); err == nil {
+						serializedParam["value"] = base64.StdEncoding.EncodeToString(raw)
+					}
+				}
+				params = append(params, serializedParam)
+			}
+			details["parameters"] = params
+
+			if balanceChanges, err := operation.parseAssetBalanceChangesFromContractEvents(); err != nil {
+				return nil, err
+			} else {
+				details["asset_balance_changes"] = balanceChanges
+			}
+
+		case xdr.HostFunctionTypeHostFunctionTypeCreateContract:
+			args := op.HostFunction.MustCreateContract()
+			switch args.ContractIdPreimage.Type {
+			case xdr.ContractIdPreimageTypeContractIdPreimageFromAddress:
+				fromAddress := args.ContractIdPreimage.MustFromAddress()
+				address, err := fromAddress.Address.String()
+				if err != nil {
+					panic(fmt.Errorf("error obtaining address for: %s", args.ContractIdPreimage.Type))
+				}
+				details["from"] = "address"
+				details["address"] = address
+				details["salt"] = fromAddress.Salt.String()
+			case xdr.ContractIdPreimageTypeContractIdPreimageFromAsset:
+				details["from"] = "asset"
+				details["asset"] = args.ContractIdPreimage.MustFromAsset().StringCanonical()
+			default:
+				panic(fmt.Errorf("unknown contract id type: %s", args.ContractIdPreimage.Type))
+			}
+		case xdr.HostFunctionTypeHostFunctionTypeUploadContractWasm:
+		default:
+			panic(fmt.Errorf("unknown host function type: %s", op.HostFunction.Type))
+		}
+	case xdr.OperationTypeExtendFootprintTtl:
+		op := operation.operation.Body.MustExtendFootprintTtlOp()
+		details["extend_to"] = op.ExtendTo
+	case xdr.OperationTypeRestoreFootprint:
 	default:
-		panic(fmt.Errorf("Unknown operation type: %s", operation.OperationType()))
+		panic(fmt.Errorf("unknown operation type: %s", operation.OperationType()))
 	}
 
 	sponsor, err := operation.getSponsor()
@@ -598,6 +738,74 @@ func (operation *transactionOperationWrapper) Details() (map[string]interface{},
 	}
 
 	return details, nil
+}
+
+// Searches an operation for SAC events that are of a type which represent
+// asset balances having changed.
+//
+// SAC events have a one-to-one association to SAC contract fn invocations.
+// i.e. invoke the 'mint' function, will trigger one Mint Event to be emitted capturing the fn args.
+//
+// SAC events that involve asset balance changes follow some standard data formats.
+// The 'amount' in the event is expressed as Int128Parts, which carries a sign, however it's expected
+// that value will not be signed as it represents a absolute delta, the event type can provide the
+// context of whether an amount was considered incremental or decremental, i.e. credit or debit to a balance.
+func (operation *transactionOperationWrapper) parseAssetBalanceChangesFromContractEvents() ([]map[string]interface{}, error) {
+	balanceChanges := []map[string]interface{}{}
+
+	diagnosticEvents, err := operation.transaction.GetDiagnosticEvents()
+	if err != nil {
+		// this operation in this context must be an InvokeHostFunctionOp, therefore V3Meta should be present
+		// as it's in same soroban model, so if any err, it's real,
+		return nil, err
+	}
+
+	for _, contractEvent := range filterEvents(diagnosticEvents) {
+		// Parse the xdr contract event to contractevents.HcnetAssetContractEvent model
+
+		// has some convenience like to/from attributes are expressed in strkey format for accounts(G...) and contracts(C...)
+		if sacEvent, err := contractevents.NewHcnetAssetContractEvent(&contractEvent, operation.network); err == nil {
+			switch sacEvent.GetType() {
+			case contractevents.EventTypeTransfer:
+				transferEvt := sacEvent.(*contractevents.TransferEvent)
+				balanceChanges = append(balanceChanges, createSACBalanceChangeEntry(transferEvt.From, transferEvt.To, transferEvt.Amount, transferEvt.Asset, "transfer"))
+			case contractevents.EventTypeMint:
+				mintEvt := sacEvent.(*contractevents.MintEvent)
+				balanceChanges = append(balanceChanges, createSACBalanceChangeEntry("", mintEvt.To, mintEvt.Amount, mintEvt.Asset, "mint"))
+			case contractevents.EventTypeClawback:
+				clawbackEvt := sacEvent.(*contractevents.ClawbackEvent)
+				balanceChanges = append(balanceChanges, createSACBalanceChangeEntry(clawbackEvt.From, "", clawbackEvt.Amount, clawbackEvt.Asset, "clawback"))
+			case contractevents.EventTypeBurn:
+				burnEvt := sacEvent.(*contractevents.BurnEvent)
+				balanceChanges = append(balanceChanges, createSACBalanceChangeEntry(burnEvt.From, "", burnEvt.Amount, burnEvt.Asset, "burn"))
+			}
+		}
+	}
+
+	return balanceChanges, nil
+}
+
+// fromAccount   - strkey format of contract or address
+// toAccount     - strkey format of contract or address, or nillable
+// amountChanged - absolute value that asset balance changed
+// asset         - the fully qualified issuer:code for asset that had balance change
+// changeType    - the type of source sac event that triggered this change
+//
+// return        - a balance changed record expressed as map of key/value's
+func createSACBalanceChangeEntry(fromAccount string, toAccount string, amountChanged xdr.Int128Parts, asset xdr.Asset, changeType string) map[string]interface{} {
+	balanceChange := map[string]interface{}{}
+
+	if fromAccount != "" {
+		balanceChange["from"] = fromAccount
+	}
+	if toAccount != "" {
+		balanceChange["to"] = toAccount
+	}
+
+	balanceChange["type"] = changeType
+	balanceChange["amount"] = amount.String128(amountChanged)
+	addAssetDetails(balanceChange, asset, "")
+	return balanceChange
 }
 
 func addLiquidityPoolAssetDetails(result map[string]interface{}, lpp xdr.LiquidityPoolParameters) error {
@@ -809,8 +1017,14 @@ func (operation *transactionOperationWrapper) Participants() ([]xdr.AccountId, e
 		// the only direct participant is the source_account
 	case xdr.OperationTypeLiquidityPoolWithdraw:
 		// the only direct participant is the source_account
+	case xdr.OperationTypeInvokeHostFunction:
+		// the only direct participant is the source_account
+	case xdr.OperationTypeExtendFootprintTtl:
+		// the only direct participant is the source_account
+	case xdr.OperationTypeRestoreFootprint:
+		// the only direct participant is the source_account
 	default:
-		return participants, fmt.Errorf("Unknown operation type: %s", op.Body.Type)
+		return participants, fmt.Errorf("unknown operation type: %s", op.Body.Type)
 	}
 
 	sponsor, err := operation.getSponsor()
@@ -825,16 +1039,25 @@ func (operation *transactionOperationWrapper) Participants() ([]xdr.AccountId, e
 }
 
 // dedupeParticipants remove any duplicate ids from `in`
-func dedupeParticipants(in []xdr.AccountId) (out []xdr.AccountId) {
-	set := map[string]xdr.AccountId{}
-	for _, id := range in {
-		set[id.Address()] = id
+func dedupeParticipants(in []xdr.AccountId) []xdr.AccountId {
+	if len(in) <= 1 {
+		return in
 	}
+	sort.Slice(in, func(i, j int) bool {
+		return in[i].Address() < in[j].Address()
+	})
+	insert := 1
+	for cur := 1; cur < len(in); cur++ {
+		if in[cur].Equals(in[cur-1]) {
+			continue
+		}
+		if insert != cur {
+			in[insert] = in[cur]
+		}
+		insert++
+	}
+	return in[:insert]
 
-	for _, id := range set {
-		out = append(out, id)
-	}
-	return
 }
 
 // OperationsParticipants returns a map with all participants per operation

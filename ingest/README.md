@@ -23,13 +23,9 @@ From a high level, the ingestion library is broken down into a few modular compo
 
                 [ Ledger Backend ]
                         |
-                     one of...
                         |
-          --------|-----+------|----------|
-         |        |            |          |
-      Captive  Database      Remote      etc.
-       Core                 Captive
-                             Core 
+                     Captive  
+                      Core 
 ```
 
 This is described in a little more detail in [`doc.go`](./doc.go), its accompanying examples, the documentation within this package, and the rest of this tutorial.
@@ -37,13 +33,7 @@ This is described in a little more detail in [`doc.go`](./doc.go), its accompany
 
 
 # Hello, World!
-As is tradition, we'll start with a simplistic example that ingests a single ledger from the network. We're immediately faced with a decision, though: _What's the backend?_ We'll use a **Captive Hcnet-Core backend** in this example because it requires (little-to-)no setup, but there are couple of alternatives available. You could also use:
-
-  - a **database** (via `NewDatabaseBackend()`), which would ingest ledgers stored in a Hcnet-Core database, or
-
-  - a **remote Captive Core** instance (via `NewRemoteCaptive()`), which works much like Captive Core, but points to an instance that isn't (necessarily) running locally.
-
-With that in mind, here's a minimalist example of the ingestion library:
+As is tradition, we'll start with a simplistic example that ingests a single ledger from the network. We'll use the **Captive Hcnet-Core backend** to ingest the ledger:
 
 ```go
 package main
@@ -52,7 +42,7 @@ import (
 	"context"
 	"fmt"
 
-	backends "github.com/hcnet/go/ingest/ledgerbackend"
+	backends "github.com/shantanu-hashcash/go/ingest/ledgerbackend"
 )
 
 func main() {
@@ -172,9 +162,9 @@ import (
 	"io"
 
 	"github.com/sirupsen/logrus"
-	"github.com/hcnet/go/ingest"
-	backends "github.com/hcnet/go/ingest/ledgerbackend"
-	"github.com/hcnet/go/support/log"
+	"github.com/shantanu-hashcash/go/ingest"
+	backends "github.com/shantanu-hashcash/go/ingest/ledgerbackend"
+	"github.com/shantanu-hashcash/go/support/log"
 )
 
 func statistics() {
@@ -277,7 +267,7 @@ In this example, we'll leverage the `CheckpointChangeReader` to determine the po
 Let's begin. As before, there's a bit of boilerplate necessary. There's only a single additional import necessary relative to the [previous Preamble](#preamble). Since we're working with checkpoint ledgers, history archives come into play:
 
 ```go
-import "github.com/hcnet/go/historyarchive"
+import "github.com/shantanu-hashcash/go/historyarchive"
 ```
 
 This time, we don't need a `LedgerBackend` instance whatsoever. The ledger changes we want to process will be fed into the reader through a different means. In our example, the history archives have the ~droids~ ledgers that we are looking for.
@@ -364,8 +354,8 @@ You can suppress many logs by changing the level to only print warnings and erro
 package main
 
 import (
-  ingest "github.com/hcnet/go/ingest/ledgerbackend"
-  "github.com/hcnet/go/support/log"
+  ingest "github.com/shantanu-hashcash/go/ingest/ledgerbackend"
+  "github.com/shantanu-hashcash/go/support/log"
   "github.com/sirupsen/logrus"
 )
 

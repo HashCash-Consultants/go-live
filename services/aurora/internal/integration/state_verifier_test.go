@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hcnet/go/keypair"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/test/integration"
-	"github.com/hcnet/go/txnbuild"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/keypair"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test/integration"
+	"github.com/shantanu-hashcash/go/txnbuild"
+	"github.com/shantanu-hashcash/go/xdr"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,7 +43,7 @@ func TestStateVerifier(t *testing.T) {
 		},
 		&txnbuild.ChangeTrust{
 			SourceAccount: sponsoredSource.AccountID,
-			Line:          txnbuild.CreditAsset{"ABCD", master.Address()}.MustToChangeTrustAsset(),
+			Line:          txnbuild.CreditAsset{Code: "ABCD", Issuer: master.Address()}.MustToChangeTrustAsset(),
 			Limit:         txnbuild.MaxTrustlineLimit,
 		},
 		&txnbuild.ChangeTrust{
@@ -62,9 +62,9 @@ func TestStateVerifier(t *testing.T) {
 		&txnbuild.ManageSellOffer{
 			SourceAccount: sponsoredSource.AccountID,
 			Selling:       txnbuild.NativeAsset{},
-			Buying:        txnbuild.CreditAsset{"ABCD", master.Address()},
+			Buying:        txnbuild.CreditAsset{Code: "ABCD", Issuer: master.Address()},
 			Amount:        "3",
-			Price:         xdr.Price{1, 1},
+			Price:         xdr.Price{N: 1, D: 1},
 		},
 		&txnbuild.ManageData{
 			SourceAccount: sponsoredSource.AccountID,
@@ -121,8 +121,8 @@ func TestStateVerifier(t *testing.T) {
 
 	// Trigger state rebuild to check if ingesting from history archive works
 	session := itest.AuroraIngest().HistoryQ().Clone()
-	q := &history.Q{session}
-	err = q.Begin()
+	q := &history.Q{SessionInterface: session}
+	err = q.Begin(context.Background())
 	assert.NoError(t, err)
 	_, err = q.GetLastLedgerIngest(context.Background())
 	assert.NoError(t, err)

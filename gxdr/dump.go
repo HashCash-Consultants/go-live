@@ -16,10 +16,10 @@ func Dump(v goxdr.XdrType) []byte {
 }
 
 // Convert serializes the given goxdr value into another destination value
-// which supports binary unmarshalling.
+// which supports binary unmarshaling.
 //
 // This function can be used to convert github.com/xdrpp/goxdr/xdr values into
-// equivalent https://github.com/hcnet/go-xdr values.
+// equivalent https://github.com/shantanu-hashcash/go-xdr values.
 func Convert(src goxdr.XdrType, dest encoding.BinaryUnmarshaler) error {
 	return dest.UnmarshalBinary(Dump(src))
 }

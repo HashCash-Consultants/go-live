@@ -9,10 +9,11 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/guregu/null"
-	"github.com/jmoiron/sqlx"
-	"github.com/hcnet/go/services/aurora/internal/db2"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // LiquidityPoolsQuery is a helper struct to configure queries to liquidity pools
@@ -188,7 +189,7 @@ func (q *Q) GetLiquidityPools(ctx context.Context, query LiquidityPoolsQuery) ([
 }
 
 func (q *Q) StreamAllLiquidityPools(ctx context.Context, callback func(LiquidityPool) error) error {
-	var rows *sqlx.Rows
+	var rows *db.Rows
 	var err error
 
 	if rows, err = q.Query(ctx, selectLiquidityPools.Where("deleted = ?", false)); err != nil {

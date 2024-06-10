@@ -1,4 +1,4 @@
-# `hcnet/expingest-verify-range`
+# `hcnet/aurora-verify-range`
 
 This docker image allows running multiple instances of `aurora ingest verify-command` on a single machine or running it in [AWS Batch](https://aws.amazon.com/batch/).
 

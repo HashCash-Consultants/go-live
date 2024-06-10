@@ -6,29 +6,31 @@ package ingest
 import (
 	"context"
 	"fmt"
-	"net/http"
+	"path"
 	"runtime"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/hcnet/go/clients/hcnetcore"
-	"github.com/hcnet/go/historyarchive"
-	"github.com/hcnet/go/ingest"
-	"github.com/hcnet/go/ingest/ledgerbackend"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/ingest/filters"
-	apkg "github.com/hcnet/go/support/app"
-	"github.com/hcnet/go/support/db"
-	"github.com/hcnet/go/support/errors"
-	logpkg "github.com/hcnet/go/support/log"
+	"github.com/shantanu-hashcash/go/clients/hcnetcore"
+	"github.com/shantanu-hashcash/go/historyarchive"
+	"github.com/shantanu-hashcash/go/ingest"
+	"github.com/shantanu-hashcash/go/ingest/ledgerbackend"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ingest/filters"
+	apkg "github.com/shantanu-hashcash/go/support/app"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/errors"
+	logpkg "github.com/shantanu-hashcash/go/support/log"
+	"github.com/shantanu-hashcash/go/support/storage"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 const (
 	// MaxSupportedProtocolVersion defines the maximum supported version of
 	// the Hcnet protocol.
-	MaxSupportedProtocolVersion uint32 = 19
+	MaxSupportedProtocolVersion uint32 = 21
 
 	// CurrentVersion reflects the latest version of the ingestion
 	// algorithm. This value is stored in KV store and is used to decide
@@ -57,7 +59,11 @@ const (
 	// - 15: Fixed bug in asset stat ingestion where clawback is enabled (#3846).
 	// - 16: Extract claimants to a separate table for better performance of
 	//       claimable balances for claimant queries.
-	CurrentVersion = 16
+	// - 17: Add contract_id column to exp_asset_stats table which is derived by ingesting
+	//       contract data ledger entries.
+	// - 18: Ingest contract asset balances so we can keep track of expired / restore asset
+	//       balances for asset stats.
+	CurrentVersion = 18
 
 	// MaxDBConnections is the size of the postgres connection pool dedicated to Aurora ingestion:
 	//  * Ledger ingestion,
@@ -67,39 +73,42 @@ const (
 
 	defaultCoreCursorName           = "HORIZON"
 	stateVerificationErrorThreshold = 3
+
+	// 100 ledgers per flush has shown in stress tests
+	// to be best point on performance curve, default to that.
+	MaxLedgersPerFlush uint32 = 100
 )
 
 var log = logpkg.DefaultLogger.WithField("service", "ingest")
 
 type Config struct {
-	CoreSession            db.SessionInterface
 	HcnetCoreURL         string
-	HcnetCoreCursor      string
-	EnableCaptiveCore      bool
 	CaptiveCoreBinaryPath  string
 	CaptiveCoreStoragePath string
 	CaptiveCoreToml        *ledgerbackend.CaptiveCoreToml
 	CaptiveCoreConfigUseDB bool
-	RemoteCaptiveCoreURL   string
 	NetworkPassphrase      string
 
-	HistorySession     db.SessionInterface
-	HistoryArchiveURLs []string
+	HistorySession        db.SessionInterface
+	HistoryArchiveURLs    []string
+	HistoryArchiveCaching bool
 
 	DisableStateVerification     bool
 	EnableReapLookupTables       bool
 	EnableExtendedLogLedgerStats bool
 
-	ReingestEnabled             bool
 	MaxReingestRetries          int
 	ReingestRetryBackoffSeconds int
 
 	// The checkpoint frequency will be 64 unless you are using an exotic test setup.
-	CheckpointFrequency uint32
+	CheckpointFrequency                  uint32
+	StateVerificationCheckpointFrequency uint32
+	StateVerificationTimeout             time.Duration
 
 	RoundingSlippageFilter int
 
-	EnableIngestionFiltering bool
+	MaxLedgerPerFlush uint32
+	SkipTxmeta        bool
 }
 
 const (
@@ -156,17 +165,14 @@ type Metrics struct {
 	// ProcessorsRunDurationSummary exposes processors run durations.
 	ProcessorsRunDurationSummary *prometheus.SummaryVec
 
-	// LedgerFetchDurationSummary exposes a summary of durations required to
-	// fetch data from ledger backend.
-	LedgerFetchDurationSummary prometheus.Summary
+	// LoadersRunDurationSummary exposes run durations for the ingestion loaders.
+	LoadersRunDurationSummary *prometheus.SummaryVec
 
-	// CaptiveHcnetCoreSynced exposes synced status of Captive Hcnet-Core.
-	// 1 if sync, 0 if not synced, -1 if unable to connect or HTTP server disabled.
-	CaptiveHcnetCoreSynced prometheus.GaugeFunc
+	// LoadersRunDurationSummary exposes stats for the ingestion loaders.
+	LoadersStatsSummary *prometheus.SummaryVec
 
-	// CaptiveCoreSupportedProtocolVersion exposes the maximum protocol version
-	// supported by the running Captive-Core.
-	CaptiveCoreSupportedProtocolVersion prometheus.GaugeFunc
+	// ArchiveRequestCounter counts how many http requests are sent to history server
+	HistoryArchiveStatsCounter *prometheus.CounterVec
 }
 
 type System interface {
@@ -176,9 +182,11 @@ type System interface {
 	StressTest(numTransactions, changesPerTransaction int) error
 	VerifyRange(fromLedger, toLedger uint32, verifyState bool) error
 	BuildState(sequence uint32, skipChecks bool) error
-	ReingestRange(ledgerRanges []history.LedgerRange, force bool) error
+	ReingestRange(ledgerRanges []history.LedgerRange, force bool, rebuildTradeAgg bool) error
 	BuildGenesisState() error
 	Shutdown()
+	GetCurrentState() State
+	RebuildTradeAggregationBuckets(fromLedger, toLedger uint32) error
 }
 
 type system struct {
@@ -208,21 +216,33 @@ type system struct {
 	stateVerificationRunning bool
 	disableStateVerification bool
 
-	checkpointManager historyarchive.CheckpointManager
+	runStateVerificationOnLedger func(uint32) bool
 
-	reapOffsets map[string]int64
+	reapOffsets       map[string]int64
+	maxLedgerPerFlush uint32
+
+	currentStateMutex sync.Mutex
+	currentState      State
 }
 
 func NewSystem(config Config) (System, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	cachingPath := ""
+	if config.HistoryArchiveCaching {
+		cachingPath = path.Join(config.CaptiveCoreStoragePath, "bucket-cache")
+	}
+
 	archive, err := historyarchive.NewArchivePool(
 		config.HistoryArchiveURLs,
-		historyarchive.ConnectOptions{
-			Context:             ctx,
+		historyarchive.ArchiveOptions{
 			NetworkPassphrase:   config.NetworkPassphrase,
 			CheckpointFrequency: config.CheckpointFrequency,
-			UserAgent:           fmt.Sprintf("aurora/%s golang/%s", apkg.Version(), runtime.Version()),
+			ConnectOptions: storage.ConnectOptions{
+				Context:   ctx,
+				UserAgent: fmt.Sprintf("aurora/%s golang/%s", apkg.Version(), runtime.Version()),
+			},
+			CachePath: cachingPath,
 		},
 	)
 	if err != nil {
@@ -230,53 +250,42 @@ func NewSystem(config Config) (System, error) {
 		return nil, errors.Wrap(err, "error creating history archive")
 	}
 
-	var ledgerBackend ledgerbackend.LedgerBackend
-	if config.EnableCaptiveCore {
-		if len(config.RemoteCaptiveCoreURL) > 0 {
-			ledgerBackend, err = ledgerbackend.NewRemoteCaptive(config.RemoteCaptiveCoreURL)
-			if err != nil {
-				cancel()
-				return nil, errors.Wrap(err, "error creating captive core backend")
-			}
-		} else {
-			logger := log.WithField("subservice", "hcnet-core")
-			ledgerBackend, err = ledgerbackend.NewCaptive(
-				ledgerbackend.CaptiveCoreConfig{
-					BinaryPath:          config.CaptiveCoreBinaryPath,
-					StoragePath:         config.CaptiveCoreStoragePath,
-					UseDB:               config.CaptiveCoreConfigUseDB,
-					Toml:                config.CaptiveCoreToml,
-					NetworkPassphrase:   config.NetworkPassphrase,
-					HistoryArchiveURLs:  config.HistoryArchiveURLs,
-					CheckpointFrequency: config.CheckpointFrequency,
-					LedgerHashStore:     ledgerbackend.NewAuroraDBLedgerHashStore(config.HistorySession),
-					Log:                 logger,
-					Context:             ctx,
-					UserAgent:           fmt.Sprintf("captivecore aurora/%s golang/%s", apkg.Version(), runtime.Version()),
-				},
-			)
-			if err != nil {
-				cancel()
-				return nil, errors.Wrap(err, "error creating captive core backend")
-			}
-		}
-	} else {
-		coreSession := config.CoreSession.Clone()
-		ledgerBackend, err = ledgerbackend.NewDatabaseBackendFromSession(coreSession, config.NetworkPassphrase)
-		if err != nil {
-			cancel()
-			return nil, errors.Wrap(err, "error creating ledger backend")
-		}
+	// the only ingest option is local captive core config
+	logger := log.WithField("subservice", "hcnet-core")
+	ledgerBackend, err := ledgerbackend.NewCaptive(
+		ledgerbackend.CaptiveCoreConfig{
+			BinaryPath:          config.CaptiveCoreBinaryPath,
+			StoragePath:         config.CaptiveCoreStoragePath,
+			UseDB:               config.CaptiveCoreConfigUseDB,
+			Toml:                config.CaptiveCoreToml,
+			NetworkPassphrase:   config.NetworkPassphrase,
+			HistoryArchiveURLs:  config.HistoryArchiveURLs,
+			CheckpointFrequency: config.CheckpointFrequency,
+			LedgerHashStore:     ledgerbackend.NewAuroraDBLedgerHashStore(config.HistorySession),
+			Log:                 logger,
+			Context:             ctx,
+			UserAgent:           fmt.Sprintf("captivecore aurora/%s golang/%s", apkg.Version(), runtime.Version()),
+		},
+	)
+	if err != nil {
+		cancel()
+		return nil, errors.Wrap(err, "error creating captive core backend")
 	}
 
 	historyQ := &history.Q{config.HistorySession.Clone()}
 	historyAdapter := newHistoryArchiveAdapter(archive)
 	filters := filters.NewFilters()
 
+	maxLedgersPerFlush := config.MaxLedgerPerFlush
+	if maxLedgersPerFlush < 1 {
+		maxLedgersPerFlush = MaxLedgersPerFlush
+	}
+
 	system := &system{
 		cancel:                      cancel,
 		config:                      config,
 		ctx:                         ctx,
+		currentState:                None,
 		disableStateVerification:    config.DisableStateVerification,
 		historyAdapter:              historyAdapter,
 		historyQ:                    historyQ,
@@ -290,14 +299,28 @@ func NewSystem(config Config) (System, error) {
 			ctx:            ctx,
 			config:         config,
 			historyQ:       historyQ,
+			session:        historyQ,
 			historyAdapter: historyAdapter,
 			filters:        filters,
 		},
-		checkpointManager: historyarchive.NewCheckpointManager(config.CheckpointFrequency),
+		runStateVerificationOnLedger: ledgerEligibleForStateVerification(
+			config.CheckpointFrequency,
+			config.StateVerificationCheckpointFrequency,
+		),
+		maxLedgerPerFlush: maxLedgersPerFlush,
 	}
 
 	system.initMetrics()
 	return system, nil
+}
+
+func ledgerEligibleForStateVerification(checkpointFrequency, stateVerificationFrequency uint32) func(ledger uint32) bool {
+	stateVerificationCheckpointManager := historyarchive.NewCheckpointManager(
+		checkpointFrequency * stateVerificationFrequency,
+	)
+	return func(ledger uint32) bool {
+		return stateVerificationCheckpointManager.IsCheckpoint(ledger)
+	}
 }
 
 func (s *system) initMetrics() {
@@ -315,22 +338,26 @@ func (s *system) initMetrics() {
 
 	s.metrics.LedgerIngestionDuration = prometheus.NewSummary(prometheus.SummaryOpts{
 		Namespace: "aurora", Subsystem: "ingest", Name: "ledger_ingestion_duration_seconds",
-		Help: "ledger ingestion durations, sliding window = 10m",
+		Help:       "ledger ingestion durations, sliding window = 10m",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 	})
 
 	s.metrics.LedgerIngestionTradeAggregationDuration = prometheus.NewSummary(prometheus.SummaryOpts{
 		Namespace: "aurora", Subsystem: "ingest", Name: "ledger_ingestion_trade_aggregation_duration_seconds",
-		Help: "ledger ingestion trade aggregation rebuild durations, sliding window = 10m",
+		Help:       "ledger ingestion trade aggregation rebuild durations, sliding window = 10m",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 	})
 
 	s.metrics.LedgerIngestionReapLookupTablesDuration = prometheus.NewSummary(prometheus.SummaryOpts{
 		Namespace: "aurora", Subsystem: "ingest", Name: "ledger_ingestion_reap_lookup_tables_duration_seconds",
-		Help: "ledger ingestion reap lookup tables durations, sliding window = 10m",
+		Help:       "ledger ingestion reap lookup tables durations, sliding window = 10m",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 	})
 
 	s.metrics.StateVerifyDuration = prometheus.NewSummary(prometheus.SummaryOpts{
 		Namespace: "aurora", Subsystem: "ingest", Name: "state_verify_duration_seconds",
-		Help: "state verification durations, sliding window = 10m",
+		Help:       "state verification durations, sliding window = 10m",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 	})
 
 	s.metrics.StateInvalidGauge = prometheus.NewGaugeFunc(
@@ -379,75 +406,49 @@ func (s *system) initMetrics() {
 	s.metrics.ProcessorsRunDurationSummary = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Namespace: "aurora", Subsystem: "ingest", Name: "processor_run_duration_seconds",
-			Help: "run durations of ingestion processors, sliding window = 10m",
+			Help:       "run durations of ingestion processors, sliding window = 10m",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		},
 		[]string{"name"},
 	)
 
-	s.metrics.LedgerFetchDurationSummary = prometheus.NewSummary(
+	s.metrics.LoadersRunDurationSummary = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Namespace: "aurora", Subsystem: "ingest", Name: "ledger_fetch_duration_seconds",
-			Help: "duration of fetching ledgers from ledger backend, sliding window = 10m",
+			Namespace: "aurora", Subsystem: "ingest", Name: "loader_run_duration_seconds",
+			Help:       "run durations of ingestion loaders, sliding window = 10m",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		},
+		[]string{"name"},
 	)
 
-	s.metrics.CaptiveHcnetCoreSynced = prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Namespace: "aurora", Subsystem: "ingest", Name: "captive_hcnet_core_synced",
-			Help: "1 if sync, 0 if not synced, -1 if unable to connect or HTTP server disabled.",
+	s.metrics.LoadersStatsSummary = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Namespace: "aurora", Subsystem: "ingest", Name: "loader_stats",
+			Help:       "stats from ingestion loaders, sliding window = 10m",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		},
-		func() float64 {
-			if !s.config.EnableCaptiveCore || (s.config.CaptiveCoreToml.HTTPPort == 0) {
-				return -1
-			}
-
-			client := hcnetcore.Client{
-				HTTP: &http.Client{
-					Timeout: 2 * time.Second,
-				},
-				URL: fmt.Sprintf("http://localhost:%d", s.config.CaptiveCoreToml.HTTPPort),
-			}
-
-			info, err := client.Info(s.ctx)
-			if err != nil {
-				log.WithError(err).Error("Cannot connect to Captive Hcnet-Core HTTP server")
-				return -1
-			}
-
-			if info.IsSynced() {
-				return 1
-			} else {
-				return 0
-			}
-		},
+		[]string{"name", "stat"},
 	)
 
-	s.metrics.CaptiveCoreSupportedProtocolVersion = prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Namespace: "aurora", Subsystem: "ingest", Name: "captive_hcnet_core_supported_protocol_version",
-			Help: "determines the supported version of the protocol by Captive-Core",
+	s.metrics.HistoryArchiveStatsCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "aurora", Subsystem: "ingest", Name: "history_archive_stats_total",
+			Help: "Counters of different history archive requests.  " +
+				"'source' label will provide name/address of the physical history archive server from the pool for which a request may be sent.  " +
+				"'type' label will further categorize the potential request into specific requests, " +
+				"'file_downloads' - the count of files downloaded from an archive server, " +
+				"'file_uploads' - the count of files uploaded to an archive server, " +
+				"'requests' - the count of all http requests(includes both queries and file downloads) sent to an archive server, " +
+				"'cache_hits' - the count of requests for an archive file that were found on local cache instead, no download request sent to archive server.",
 		},
-		func() float64 {
-			if !s.config.EnableCaptiveCore || (s.config.CaptiveCoreToml.HTTPPort == 0) {
-				return -1
-			}
-
-			client := hcnetcore.Client{
-				HTTP: &http.Client{
-					Timeout: 2 * time.Second,
-				},
-				URL: fmt.Sprintf("http://localhost:%d", s.config.CaptiveCoreToml.HTTPPort),
-			}
-
-			info, err := client.Info(s.ctx)
-			if err != nil {
-				log.WithError(err).Error("Cannot connect to Captive Hcnet-Core HTTP server")
-				return -1
-			}
-
-			return float64(info.Info.ProtocolVersion)
-		},
+		[]string{"source", "type"},
 	)
+}
+
+func (s *system) GetCurrentState() State {
+	s.currentStateMutex.Lock()
+	defer s.currentStateMutex.Unlock()
+	return s.currentState
 }
 
 func (s *system) Metrics() Metrics {
@@ -466,10 +467,11 @@ func (s *system) RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(s.metrics.LedgerStatsCounter)
 	registry.MustRegister(s.metrics.ProcessorsRunDuration)
 	registry.MustRegister(s.metrics.ProcessorsRunDurationSummary)
-	registry.MustRegister(s.metrics.CaptiveHcnetCoreSynced)
-	registry.MustRegister(s.metrics.CaptiveCoreSupportedProtocolVersion)
-	registry.MustRegister(s.metrics.LedgerFetchDurationSummary)
+	registry.MustRegister(s.metrics.LoadersRunDurationSummary)
+	registry.MustRegister(s.metrics.LoadersStatsSummary)
 	registry.MustRegister(s.metrics.StateVerifyLedgerEntriesCount)
+	registry.MustRegister(s.metrics.HistoryArchiveStatsCounter)
+	s.ledgerBackend = ledgerbackend.WithMetrics(s.ledgerBackend, registry, "aurora")
 }
 
 // Run starts ingestion system. Ingestion system supports distributed ingestion
@@ -563,7 +565,7 @@ func validateRanges(ledgerRanges []history.LedgerRange) error {
 
 // ReingestRange runs the ingestion pipeline on the range of ledgers ingesting
 // history data only.
-func (s *system) ReingestRange(ledgerRanges []history.LedgerRange, force bool) error {
+func (s *system) ReingestRange(ledgerRanges []history.LedgerRange, force bool, rebuildTradeAgg bool) error {
 	if err := validateRanges(ledgerRanges); err != nil {
 		return err
 	}
@@ -584,8 +586,18 @@ func (s *system) ReingestRange(ledgerRanges []history.LedgerRange, force bool) e
 		if err != nil {
 			return err
 		}
+		if rebuildTradeAgg {
+			err = s.RebuildTradeAggregationBuckets(cur.StartSequence, cur.EndSequence)
+			if err != nil {
+				return errors.Wrap(err, "Error rebuilding trade aggregations")
+			}
+		}
 	}
 	return nil
+}
+
+func (s *system) RebuildTradeAggregationBuckets(fromLedger, toLedger uint32) error {
+	return s.historyQ.RebuildTradeAggregationBuckets(s.ctx, fromLedger, toLedger, s.config.RoundingSlippageFilter)
 }
 
 // BuildGenesisState runs the ingestion pipeline on genesis ledger. Transitions
@@ -615,6 +627,10 @@ func (s *system) runStateMachine(cur stateMachineNode) error {
 			panic("unexpected transaction")
 		}
 
+		s.currentStateMutex.Lock()
+		s.currentState = cur.GetState()
+		s.currentStateMutex.Unlock()
+
 		next, err := cur.run(s)
 		if err != nil {
 			logger := log.WithFields(logpkg.F{
@@ -622,7 +638,7 @@ func (s *system) runStateMachine(cur stateMachineNode) error {
 				"current_state": cur,
 				"next_state":    next.node,
 			})
-			if isCancelledError(err) {
+			if isCancelledError(s.ctx, err) {
 				// We only expect context.Canceled errors to occur when aurora is shutting down
 				// so we log these errors using the info log level
 				logger.Info("Error in ingestion state machine")
@@ -652,10 +668,10 @@ func (s *system) runStateMachine(cur stateMachineNode) error {
 	}
 }
 
-func (s *system) maybeVerifyState(lastIngestedLedger uint32) {
+func (s *system) maybeVerifyState(lastIngestedLedger uint32, expectedBucketListHash xdr.Hash) {
 	stateInvalid, err := s.historyQ.GetExpStateInvalid(s.ctx)
 	if err != nil {
-		if !isCancelledError(err) {
+		if !isCancelledError(s.ctx, err) {
 			log.WithField("err", err).Error("Error getting state invalid value")
 		}
 		return
@@ -664,14 +680,14 @@ func (s *system) maybeVerifyState(lastIngestedLedger uint32) {
 	// Run verification routine only when...
 	if !stateInvalid && // state has not been proved to be invalid...
 		!s.disableStateVerification && // state verification is not disabled...
-		s.checkpointManager.IsCheckpoint(lastIngestedLedger) { // it's a checkpoint ledger.
+		s.runStateVerificationOnLedger(lastIngestedLedger) { // it's a ledger eligible for state verification.
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 
-			err := s.verifyState(true)
+			err := s.verifyState(true, lastIngestedLedger, expectedBucketListHash)
 			if err != nil {
-				if isCancelledError(err) {
+				if isCancelledError(s.ctx, err) {
 					return
 				}
 
@@ -710,7 +726,7 @@ func (s *system) maybeReapLookupTables(lastIngestedLedger uint32) {
 		return
 	}
 
-	err = s.historyQ.Begin()
+	err = s.historyQ.Begin(s.ctx)
 	if err != nil {
 		log.WithField("err", err).Error("Error starting a transaction")
 		return
@@ -771,26 +787,6 @@ func (s *system) resetStateVerificationErrors() {
 	s.stateVerificationErrors = 0
 }
 
-func (s *system) updateCursor(ledgerSequence uint32) error {
-	if s.hcnetCoreClient == nil || s.config.EnableCaptiveCore {
-		return nil
-	}
-
-	cursor := defaultCoreCursorName
-	if s.config.HcnetCoreCursor != "" {
-		cursor = s.config.HcnetCoreCursor
-	}
-
-	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
-	defer cancel()
-	err := s.hcnetCoreClient.SetCursor(ctx, cursor, int32(ledgerSequence))
-	if err != nil {
-		return errors.Wrap(err, "Setting hcnet-core cursor failed")
-	}
-
-	return nil
-}
-
 func (s *system) Shutdown() {
 	log.Info("Shutting down ingestion system...")
 	s.stateVerificationMutex.Lock()
@@ -815,7 +811,8 @@ func markStateInvalid(ctx context.Context, historyQ history.IngestionQ, err erro
 	}
 }
 
-func isCancelledError(err error) bool {
+func isCancelledError(ctx context.Context, err error) bool {
 	cause := errors.Cause(err)
-	return cause == context.Canceled || cause == db.ErrCancelled
+	return cause == context.Canceled || cause == db.ErrCancelled ||
+		(ctx.Err() == context.Canceled && cause == db.ErrAlreadyRolledback)
 }

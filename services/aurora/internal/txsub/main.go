@@ -5,8 +5,8 @@ import (
 
 	"context"
 
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // Listener represents some client who is interested in retrieving the result
@@ -24,18 +24,18 @@ type Listener chan<- Result
 type OpenSubmissionList interface {
 	// Add registers the provided listener as interested in being notified when a
 	// result is available for the provided transaction hash.
-	Add(context.Context, string, Listener) error
+	Add(string, Listener)
 
 	// Finish forwards the provided result on to any listeners and cleans up any
 	// resources associated with the transaction that this result is for
-	Finish(context.Context, string, Result) error
+	Finish(string, Result)
 
 	// Clean removes any open submissions over the provided age.
-	Clean(context.Context, time.Duration) (int, error)
+	Clean(time.Duration) int
 
 	// Pending return a list of transaction hashes that have at least one
 	// listener registered to them in this list.
-	Pending(context.Context) []string
+	Pending() []string
 }
 
 // Submitter represents the low-level "submit a transaction to hcnet-core"

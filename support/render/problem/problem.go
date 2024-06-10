@@ -14,8 +14,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/log"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/log"
 )
 
 var (
@@ -61,7 +61,7 @@ type P struct {
 }
 
 func (p P) Error() string {
-	return fmt.Sprintf("problem: %s", p.Type)
+	return fmt.Sprintf("problem: %s. full details: %s", p.Type, p.Detail)
 }
 
 // LogFilter describes which errors should be logged when terminating requests in

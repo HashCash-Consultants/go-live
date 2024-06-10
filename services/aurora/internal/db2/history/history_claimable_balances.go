@@ -6,15 +6,15 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 
-	"github.com/hcnet/go/support/db"
-	"github.com/hcnet/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/errors"
 )
 
 // QHistoryClaimableBalances defines account related queries.
 type QHistoryClaimableBalances interface {
 	CreateHistoryClaimableBalances(ctx context.Context, ids []string, batchSize int) (map[string]int64, error)
-	NewOperationClaimableBalanceBatchInsertBuilder(maxBatchSize int) OperationClaimableBalanceBatchInsertBuilder
-	NewTransactionClaimableBalanceBatchInsertBuilder(maxBatchSize int) TransactionClaimableBalanceBatchInsertBuilder
+	NewOperationClaimableBalanceBatchInsertBuilder() OperationClaimableBalanceBatchInsertBuilder
+	NewTransactionClaimableBalanceBatchInsertBuilder() TransactionClaimableBalanceBatchInsertBuilder
 }
 
 // CreateHistoryClaimableBalances creates rows in the history_claimable_balances table for a given list of ids.
@@ -27,7 +27,7 @@ func (q *Q) CreateHistoryClaimableBalances(ctx context.Context, ids []string, ba
 	}
 
 	// sort before inserting to prevent deadlocks on acquiring a ShareLock
-	// https://github.com/hcnet/go/issues/2370
+	// https://github.com/shantanu-hashcash/go/issues/2370
 	sort.Strings(ids)
 	for _, id := range ids {
 		err := builder.Row(ctx, map[string]interface{}{
@@ -92,63 +92,61 @@ func (q *Q) ClaimableBalanceByID(ctx context.Context, id string) (dest HistoryCl
 }
 
 type OperationClaimableBalanceBatchInsertBuilder interface {
-	Add(ctx context.Context, operationID, internalID int64) error
-	Exec(ctx context.Context) error
+	Add(operationID int64, claimableBalance FutureClaimableBalanceID) error
+	Exec(ctx context.Context, session db.SessionInterface) error
 }
 
 type operationClaimableBalanceBatchInsertBuilder struct {
-	builder db.BatchInsertBuilder
+	table   string
+	builder db.FastBatchInsertBuilder
 }
 
-func (q *Q) NewOperationClaimableBalanceBatchInsertBuilder(maxBatchSize int) OperationClaimableBalanceBatchInsertBuilder {
+func (q *Q) NewOperationClaimableBalanceBatchInsertBuilder() OperationClaimableBalanceBatchInsertBuilder {
 	return &operationClaimableBalanceBatchInsertBuilder{
-		builder: db.BatchInsertBuilder{
-			Table:        q.GetTable("history_operation_claimable_balances"),
-			MaxBatchSize: maxBatchSize,
-		},
+		table:   "history_operation_claimable_balances",
+		builder: db.FastBatchInsertBuilder{},
 	}
 }
 
 // Add adds a new operation claimable balance to the batch
-func (i *operationClaimableBalanceBatchInsertBuilder) Add(ctx context.Context, operationID, internalID int64) error {
-	return i.builder.Row(ctx, map[string]interface{}{
+func (i *operationClaimableBalanceBatchInsertBuilder) Add(operationID int64, claimableBalance FutureClaimableBalanceID) error {
+	return i.builder.Row(map[string]interface{}{
 		"history_operation_id":         operationID,
-		"history_claimable_balance_id": internalID,
+		"history_claimable_balance_id": claimableBalance,
 	})
 }
 
 // Exec flushes all pending operation claimable balances to the db
-func (i *operationClaimableBalanceBatchInsertBuilder) Exec(ctx context.Context) error {
-	return i.builder.Exec(ctx)
+func (i *operationClaimableBalanceBatchInsertBuilder) Exec(ctx context.Context, session db.SessionInterface) error {
+	return i.builder.Exec(ctx, session, i.table)
 }
 
 type TransactionClaimableBalanceBatchInsertBuilder interface {
-	Add(ctx context.Context, transactionID, internalID int64) error
-	Exec(ctx context.Context) error
+	Add(transactionID int64, claimableBalance FutureClaimableBalanceID) error
+	Exec(ctx context.Context, session db.SessionInterface) error
 }
 
 type transactionClaimableBalanceBatchInsertBuilder struct {
-	builder db.BatchInsertBuilder
+	table   string
+	builder db.FastBatchInsertBuilder
 }
 
-func (q *Q) NewTransactionClaimableBalanceBatchInsertBuilder(maxBatchSize int) TransactionClaimableBalanceBatchInsertBuilder {
+func (q *Q) NewTransactionClaimableBalanceBatchInsertBuilder() TransactionClaimableBalanceBatchInsertBuilder {
 	return &transactionClaimableBalanceBatchInsertBuilder{
-		builder: db.BatchInsertBuilder{
-			Table:        q.GetTable("history_transaction_claimable_balances"),
-			MaxBatchSize: maxBatchSize,
-		},
+		table:   "history_transaction_claimable_balances",
+		builder: db.FastBatchInsertBuilder{},
 	}
 }
 
 // Add adds a new transaction claimable balance to the batch
-func (i *transactionClaimableBalanceBatchInsertBuilder) Add(ctx context.Context, transactionID, internalID int64) error {
-	return i.builder.Row(ctx, map[string]interface{}{
+func (i *transactionClaimableBalanceBatchInsertBuilder) Add(transactionID int64, claimableBalance FutureClaimableBalanceID) error {
+	return i.builder.Row(map[string]interface{}{
 		"history_transaction_id":       transactionID,
-		"history_claimable_balance_id": internalID,
+		"history_claimable_balance_id": claimableBalance,
 	})
 }
 
 // Exec flushes all pending transaction claimable balances to the db
-func (i *transactionClaimableBalanceBatchInsertBuilder) Exec(ctx context.Context) error {
-	return i.builder.Exec(ctx)
+func (i *transactionClaimableBalanceBatchInsertBuilder) Exec(ctx context.Context, session db.SessionInterface) error {
+	return i.builder.Exec(ctx, session, i.table)
 }

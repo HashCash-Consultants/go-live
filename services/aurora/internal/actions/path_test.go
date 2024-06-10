@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"testing"
 
-	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/test"
+	auroraContext "github.com/shantanu-hashcash/go/services/aurora/internal/context"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,7 +27,7 @@ func TestAssetsForAddressRequiresTransaction(t *testing.T) {
 	_, _, err := assetsForAddress(r.WithContext(ctx), "GCATOZ7YJV2FANQQLX47TIV6P7VMPJCEEJGQGR6X7TONPKBN3UCLKEIS")
 	assert.EqualError(t, err, "cannot be called outside of a transaction")
 
-	assert.NoError(t, q.Begin())
+	assert.NoError(t, q.Begin(ctx))
 	defer q.Rollback()
 
 	_, _, err = assetsForAddress(r.WithContext(ctx), "GCATOZ7YJV2FANQQLX47TIV6P7VMPJCEEJGQGR6X7TONPKBN3UCLKEIS")

@@ -9,14 +9,14 @@ import (
 	firebaseauth "firebase.google.com/go/auth"
 	"github.com/go-chi/chi"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/hcnet/go/exp/services/recoverysigner/internal/account"
-	"github.com/hcnet/go/exp/services/recoverysigner/internal/db"
-	"github.com/hcnet/go/exp/services/recoverysigner/internal/serve/auth"
-	"github.com/hcnet/go/keypair"
-	"github.com/hcnet/go/support/errors"
-	supporthttp "github.com/hcnet/go/support/http"
-	supportlog "github.com/hcnet/go/support/log"
-	"github.com/hcnet/go/support/render/health"
+	"github.com/shantanu-hashcash/go/exp/services/recoverysigner/internal/account"
+	"github.com/shantanu-hashcash/go/exp/services/recoverysigner/internal/db"
+	"github.com/shantanu-hashcash/go/exp/services/recoverysigner/internal/serve/auth"
+	"github.com/shantanu-hashcash/go/keypair"
+	"github.com/shantanu-hashcash/go/support/errors"
+	supporthttp "github.com/shantanu-hashcash/go/support/http"
+	supportlog "github.com/shantanu-hashcash/go/support/log"
+	"github.com/shantanu-hashcash/go/support/render/health"
 	"gopkg.in/square/go-jose.v2"
 )
 
@@ -145,12 +145,14 @@ func getHandlerDeps(opts Options) (handlerDeps, error) {
 	}
 
 	allowedSourceAccounts := []*keypair.FromAddress{}
-	for _, addressStr := range strings.Split(opts.AllowedSourceAccounts, ",") {
-		accountAddress, err := keypair.ParseAddress(addressStr)
-		if err != nil {
-			return handlerDeps{}, errors.Wrap(err, "parsing allowed source accounts")
+	if opts.AllowedSourceAccounts != "" {
+		for _, addressStr := range strings.Split(opts.AllowedSourceAccounts, ",") {
+			accountAddress, err := keypair.ParseAddress(addressStr)
+			if err != nil {
+				return handlerDeps{}, errors.Wrap(err, "parsing allowed source accounts")
+			}
+			allowedSourceAccounts = append(allowedSourceAccounts, accountAddress)
 		}
-		allowedSourceAccounts = append(allowedSourceAccounts, accountAddress)
 	}
 
 	deps := handlerDeps{

@@ -3,8 +3,11 @@ package txnbuild
 import (
 	"testing"
 
-	"github.com/hcnet/go/amount"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/amount"
+	"github.com/shantanu-hashcash/go/gxdr"
+	"github.com/shantanu-hashcash/go/randxdr"
+	"github.com/shantanu-hashcash/go/xdr"
+	goxdr "github.com/xdrpp/goxdr/xdr"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -445,7 +448,7 @@ func TestBumpSequenceFromXDR(t *testing.T) {
 	}
 }
 
-func testOperationsMarshallingRoundtrip(t *testing.T, operations []Operation, withMuxedAccounts bool) {
+func testOperationsMarshalingRoundtrip(t *testing.T, operations []Operation, withMuxedAccounts bool) {
 	kp1 := newKeypair1()
 	accountID := xdr.MustAddress(kp1.Address())
 	mx := xdr.MuxedAccount{
@@ -489,5 +492,35 @@ func testOperationsMarshallingRoundtrip(t *testing.T, operations []Operation, wi
 
 	for i := 0; i < len(operations); i++ {
 		assert.Equal(t, operations[i], tx.Operations()[i])
+	}
+}
+
+func TestOperationCoverage(t *testing.T) {
+	gen := randxdr.NewGenerator()
+	for i := 0; i < 10000; i++ {
+		op := xdr.Operation{}
+		shape := &gxdr.Operation{}
+		gen.Next(
+			shape,
+			[]randxdr.Preset{
+				{randxdr.IsDeepAuthorizedInvocationTree, randxdr.SetVecLen(0)},
+				{
+					randxdr.FieldEquals("body.revokeSponsorshipOp.ledgerKey.type"),
+					randxdr.SetU32(
+						gxdr.ACCOUNT.GetU32(),
+						gxdr.TRUSTLINE.GetU32(),
+						gxdr.OFFER.GetU32(),
+						gxdr.DATA.GetU32(),
+						gxdr.CLAIMABLE_BALANCE.GetU32(),
+					),
+				},
+			},
+		)
+		assert.NoError(t, gxdr.Convert(shape, &op))
+
+		_, err := operationFromXDR(op)
+		if !assert.NoError(t, err) {
+			t.Log(goxdr.XdrToString(shape))
+		}
 	}
 }

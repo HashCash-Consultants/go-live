@@ -11,8 +11,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
-	tdb "github.com/hcnet/go/services/aurora/internal/test/db"
-	"github.com/hcnet/go/support/log"
+	tdb "github.com/shantanu-hashcash/go/services/aurora/internal/test/db"
+	"github.com/shantanu-hashcash/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,11 +25,12 @@ type StaticMockServer struct {
 
 // T provides a common set of functionality for each test in aurora
 type T struct {
-	T          *testing.T
-	Assert     *assert.Assertions
-	Require    *require.Assertions
-	Ctx        context.Context
-	AuroraDB  *sqlx.DB
+	T         *testing.T
+	Assert    *assert.Assertions
+	Require   *require.Assertions
+	Ctx       context.Context
+	AuroraDB *sqlx.DB
+	//TODO - remove ref to core db once scenario tests are removed.
 	CoreDB     *sqlx.DB
 	EndLogTest func() []logrus.Entry
 }

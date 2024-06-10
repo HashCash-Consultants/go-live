@@ -12,8 +12,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/log"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/log"
 )
 
 var extractBinName = regexp.MustCompile(`^(?P<bin>[a-z0-9-]+)-(?P<tag>.+)$`)
@@ -103,7 +103,7 @@ func build(pkg, dest, version, buildOS, buildArch string) {
 	rev := runOutput("git", "rev-parse", "HEAD")
 	versionString := version[1:] // Remove letter `v`
 	versionFlag := fmt.Sprintf(
-		"-X=github.com/hcnet/go/support/app.version=%s-%s",
+		"-X=github.com/shantanu-hashcash/go/support/app.version=%s-%s",
 		versionString, rev,
 	)
 
@@ -321,11 +321,6 @@ func prepareDest(pkg, bin, version, os, arch string) string {
 	run("cp", "COPYING", dest)
 	run("cp", filepath.Join(pkg, "README.md"), dest)
 	run("cp", filepath.Join(pkg, "CHANGELOG.md"), dest)
-	if bin == "aurora" {
-		// Add default config files for Captive-Core
-		run("cp", filepath.Join(pkg, "configs/captive-core-pubnet.cfg"), dest)
-		run("cp", filepath.Join(pkg, "configs/captive-core-testnet.cfg"), dest)
-	}
 	return dest
 }
 
@@ -355,7 +350,7 @@ func repoName() string {
 	if os.Getenv("REPO") != "" {
 		return os.Getenv("REPO")
 	}
-	return "github.com/hcnet/go"
+	return "github.com/shantanu-hashcash/go"
 
 }
 

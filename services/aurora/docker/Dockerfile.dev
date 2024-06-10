@@ -1,13 +1,14 @@
-FROM golang:1.19.1 AS builder
+FROM golang:1.22-bullseye AS builder
 
-WORKDIR /go/src/github.com/hcnet/go
+ARG VERSION="devel"
+WORKDIR /go/src/github.com/shantanu-hashcash/go
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . ./
-RUN go install github.com/hcnet/go/services/aurora
-RUN go install github.com/hcnet/go/exp/services/captivecore
+ENV GOFLAGS="-ldflags=-X=github.com/shantanu-hashcash/go/support/app.version=${VERSION}-(built-from-source)"
+RUN go install github.com/shantanu-hashcash/go/services/aurora
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ARG HCNET_CORE_VERSION 
 ENV HCNET_CORE_VERSION=${HCNET_CORE_VERSION:-*}
 ENV HCNET_CORE_BINARY_PATH /usr/bin/hcnet-core
@@ -22,7 +23,6 @@ RUN apt-get update && apt-get install -y hcnet-core=${HCNET_CORE_VERSION}
 RUN apt-get clean
 
 COPY --from=builder /go/bin/aurora ./
-COPY --from=builder /go/bin/captivecore ./
 
 ENTRYPOINT ["./aurora"]
     

@@ -8,14 +8,16 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/hcnet/go/protocols/aurora/base"
-	"github.com/hcnet/go/strkey"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/render/hal"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/protocols/aurora/base"
+	proto "github.com/shantanu-hashcash/go/protocols/hcnetcore"
+	"github.com/shantanu-hashcash/go/strkey"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // KeyTypeNames maps from strkey version bytes into json string values to use in
@@ -27,6 +29,13 @@ var KeyTypeNames = map[strkey.VersionByte]string{
 	strkey.VersionByteHashTx:        "preauth_tx",
 	strkey.VersionByteHashX:         "sha256_hash",
 	strkey.VersionByteSignedPayload: "ed25519_signed_payload",
+}
+
+var coreStatusToHTTPStatus = map[string]int{
+	proto.TXStatusPending:       http.StatusCreated,
+	proto.TXStatusDuplicate:     http.StatusConflict,
+	proto.TXStatusTryAgainLater: http.StatusServiceUnavailable,
+	proto.TXStatusError:         http.StatusBadRequest,
 }
 
 // Account is the summary of an account
@@ -166,16 +175,21 @@ type AssetStat struct {
 	} `json:"_links"`
 
 	base.Asset
-	PT string `json:"paging_token"`
+	PT         string `json:"paging_token"`
+	ContractID string `json:"contract_id,omitempty"`
 	// Action needed in release: aurora-v3.0.0: deprecated field
 	NumAccounts          int32 `json:"num_accounts"`
 	NumClaimableBalances int32 `json:"num_claimable_balances"`
 	NumLiquidityPools    int32 `json:"num_liquidity_pools"`
+	NumContracts         int32 `json:"num_contracts"`
+	NumArchivedContracts int32 `json:"num_archived_contracts"`
 	// Action needed in release: aurora-v3.0.0: deprecated field
 	Amount                  string            `json:"amount"`
 	Accounts                AssetStatAccounts `json:"accounts"`
 	ClaimableBalancesAmount string            `json:"claimable_balances_amount"`
 	LiquidityPoolsAmount    string            `json:"liquidity_pools_amount"`
+	ContractsAmount         string            `json:"contracts_amount"`
+	ArchivedContractsAmount string            `json:"archived_contracts_amount"`
 	Balances                AssetStatBalances `json:"balances"`
 	Flags                   AccountFlags      `json:"flags"`
 }
@@ -513,7 +527,7 @@ type Transaction struct {
 	OperationCount    int32     `json:"operation_count"`
 	EnvelopeXdr       string    `json:"envelope_xdr"`
 	ResultXdr         string    `json:"result_xdr"`
-	ResultMetaXdr     string    `json:"result_meta_xdr"`
+	ResultMetaXdr     string    `json:"result_meta_xdr,omitempty"`
 	FeeMetaXdr        string    `json:"fee_meta_xdr"`
 	MemoType          string    `json:"memo_type"`
 	MemoBytes         string    `json:"memo_bytes,omitempty"`
@@ -560,6 +574,26 @@ type InnerTransaction struct {
 	Hash       string   `json:"hash"`
 	Signatures []string `json:"signatures"`
 	MaxFee     int64    `json:"max_fee,string"`
+}
+
+// AsyncTransactionSubmissionResponse represents the response returned by Aurora
+// when using the transaction-async endpoint.
+type AsyncTransactionSubmissionResponse struct {
+	// ErrorResultXDR is present only if Status is equal to proto.TXStatusError.
+	// ErrorResultXDR is a TransactionResult xdr string which contains details on why
+	// the transaction could not be accepted by hcnet-core.
+	ErrorResultXDR string `json:"errorResultXdr,omitempty"`
+	// TxStatus represents the status of the transaction submission returned by hcnet-core.
+	// It can be one of: proto.TXStatusPending, proto.TXStatusDuplicate,
+	// proto.TXStatusTryAgainLater, or proto.TXStatusError.
+	TxStatus string `json:"tx_status"`
+	// Hash is a hash of the transaction which can be used to look up whether
+	// the transaction was included in the ledger.
+	Hash string `json:"hash"`
+}
+
+func (response AsyncTransactionSubmissionResponse) GetStatus() int {
+	return coreStatusToHTTPStatus[response.TxStatus]
 }
 
 // MarshalJSON implements a custom marshaler for Transaction.
@@ -728,7 +762,7 @@ type FeeDistribution struct {
 }
 
 // FeeStats represents a response of fees from aurora
-// To do: implement fee suggestions if agreement is reached in https://github.com/hcnet/go/issues/926
+// To do: implement fee suggestions if agreement is reached in https://github.com/shantanu-hashcash/go/issues/926
 type FeeStats struct {
 	LastLedger          uint32  `json:"last_ledger,string"`
 	LastLedgerBaseFee   int64   `json:"last_ledger_base_fee,string"`

@@ -4,12 +4,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/hcnet/throttled"
+	"github.com/shantanu-hashcash/throttled"
 
-	"github.com/hcnet/go/network"
-	"github.com/hcnet/go/services/aurora/internal/test"
-	tdb "github.com/hcnet/go/services/aurora/internal/test/db"
-	supportLog "github.com/hcnet/go/support/log"
+	"github.com/shantanu-hashcash/go/network"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
+	supportLog "github.com/shantanu-hashcash/go/support/log"
 )
 
 func NewTestApp(dsn string) *App {
@@ -22,8 +21,7 @@ func NewTestApp(dsn string) *App {
 
 func NewTestConfig(dsn string) Config {
 	return Config{
-		DatabaseURL:            dsn,
-		HcnetCoreDatabaseURL: tdb.HcnetCoreURL(),
+		DatabaseURL: dsn,
 		RateQuota: &throttled.RateQuota{
 			MaxRate:  throttled.PerHour(1000),
 			MaxBurst: 100,

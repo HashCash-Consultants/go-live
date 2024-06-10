@@ -4,11 +4,11 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/hcnet/go/protocols/aurora"
-	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
-	"github.com/hcnet/go/services/aurora/internal/ingest"
-	"github.com/hcnet/go/services/aurora/internal/ledger"
-	"github.com/hcnet/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/protocols/aurora"
+	auroraContext "github.com/shantanu-hashcash/go/services/aurora/internal/context"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ingest"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ledger"
+	"github.com/shantanu-hashcash/go/support/render/hal"
 )
 
 // Populate fills in the details
@@ -46,7 +46,7 @@ func PopulateRoot(
 	dest.Links.AccountTransactions = lb.PagedLink("/accounts/{account_id}/transactions")
 	dest.Links.Assets = lb.Link("/assets{?asset_code,asset_issuer,cursor,limit,order}")
 	dest.Links.Effects = lb.Link("/effects{?cursor,limit,order}")
-	dest.Links.Ledger = lb.Link("/ledger/{sequence}")
+	dest.Links.Ledger = lb.Link("/ledgers/{sequence}")
 	dest.Links.Ledgers = lb.Link("/ledgers{?cursor,limit,order}")
 	dest.Links.FeeStats = lb.Link("/fee_stats")
 	dest.Links.Operation = lb.Link("/operations/{id}")

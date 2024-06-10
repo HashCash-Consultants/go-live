@@ -9,15 +9,15 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/hcnet/go/clients/auroraclient"
-	"github.com/hcnet/go/network"
-	hProtocol "github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/strkey"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/txnbuild"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/clients/auroraclient"
+	"github.com/shantanu-hashcash/go/network"
+	hProtocol "github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/strkey"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/txnbuild"
+	"github.com/shantanu-hashcash/go/xdr"
 
-	"github.com/hcnet/go/keypair"
+	"github.com/shantanu-hashcash/go/keypair"
 )
 
 // The account address of the TestNet "friendbot"
@@ -50,7 +50,7 @@ func InitKeys(n int) []Account {
 		}
 
 		jsonAccounts, err2 := json.MarshalIndent(accounts, "", "  ")
-		dieIfError("problem marshalling json accounts", err2)
+		dieIfError("problem marshaling json accounts", err2)
 		err = ioutil.WriteFile(accountsFile, jsonAccounts, 0644)
 		dieIfError("problem writing json accounts file", err)
 		log.Info("Wrote keypairs to local file ", accountsFile)

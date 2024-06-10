@@ -6,15 +6,17 @@ import (
 	"mime"
 	"net/http"
 
-	"github.com/hcnet/go/network"
-	"github.com/hcnet/go/protocols/aurora"
-	hProblem "github.com/hcnet/go/services/aurora/internal/render/problem"
-	"github.com/hcnet/go/services/aurora/internal/resourceadapter"
-	"github.com/hcnet/go/services/aurora/internal/txsub"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/render/hal"
-	"github.com/hcnet/go/support/render/problem"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/network"
+	"github.com/shantanu-hashcash/go/support/errors"
+
+	"github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/protocols/hcnetcore"
+	hProblem "github.com/shantanu-hashcash/go/services/aurora/internal/render/problem"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/resourceadapter"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/txsub"
+	"github.com/shantanu-hashcash/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/support/render/problem"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 type NetworkSubmitter interface {
@@ -24,7 +26,9 @@ type NetworkSubmitter interface {
 type SubmitTransactionHandler struct {
 	Submitter         NetworkSubmitter
 	NetworkPassphrase string
+	DisableTxSub      bool
 	CoreStateGetter
+	SkipTxMeta bool
 }
 
 type envelopeInfo struct {
@@ -57,7 +61,7 @@ func extractEnvelopeInfo(raw string, passphrase string) (envelopeInfo, error) {
 	return result, nil
 }
 
-func (handler SubmitTransactionHandler) validateBodyType(r *http.Request) error {
+func validateBodyType(r *http.Request) error {
 	c := r.Header.Get("Content-Type")
 	if c == "" {
 		return nil
@@ -82,6 +86,7 @@ func (handler SubmitTransactionHandler) response(r *http.Request, info envelopeI
 			info.hash,
 			&resource,
 			result.Transaction,
+			handler.SkipTxMeta,
 		)
 		return resource, err
 	}
@@ -94,15 +99,30 @@ func (handler SubmitTransactionHandler) response(r *http.Request, info envelopeI
 		return nil, &hProblem.ClientDisconnected
 	}
 
-	switch err := result.Err.(type) {
-	case *txsub.FailedTransactionError:
+	if failedErr, ok := result.Err.(*txsub.FailedTransactionError); ok {
 		rcr := aurora.TransactionResultCodes{}
-		resourceadapter.PopulateTransactionResultCodes(
+		err := resourceadapter.PopulateTransactionResultCodes(
 			r.Context(),
 			info.hash,
 			&rcr,
-			err,
+			failedErr,
 		)
+		if err != nil {
+			return nil, failedErr
+		}
+
+		extras := map[string]interface{}{
+			"envelope_xdr": info.raw,
+			"result_xdr":   failedErr.ResultXDR,
+			"result_codes": rcr,
+		}
+		if failedErr.DiagnosticEventsXDR != "" {
+			events, err := hcnetcore.DiagnosticEventsToSlice(failedErr.DiagnosticEventsXDR)
+			if err != nil {
+				return nil, err
+			}
+			extras["diagnostic_events"] = events
+		}
 
 		return nil, &problem.P{
 			Type:   "transaction_failed",
@@ -112,11 +132,7 @@ func (handler SubmitTransactionHandler) response(r *http.Request, info envelopeI
 				"The `extras.result_codes` field on this response contains further " +
 				"details.  Descriptions of each code can be found at: " +
 				"https://developers.hcnet.org/api/errors/http-status-codes/aurora-specific/transaction-failed/",
-			Extras: map[string]interface{}{
-				"envelope_xdr": info.raw,
-				"result_xdr":   err.ResultXDR,
-				"result_codes": rcr,
-			},
+			Extras: extras,
 		}
 	}
 
@@ -124,8 +140,19 @@ func (handler SubmitTransactionHandler) response(r *http.Request, info envelopeI
 }
 
 func (handler SubmitTransactionHandler) GetResource(w HeaderWriter, r *http.Request) (interface{}, error) {
-	if err := handler.validateBodyType(r); err != nil {
+	if err := validateBodyType(r); err != nil {
 		return nil, err
+	}
+
+	if handler.DisableTxSub {
+		return nil, &problem.P{
+			Type:   "transaction_submission_disabled",
+			Title:  "Transaction Submission Disabled",
+			Status: http.StatusForbidden,
+			Detail: "Transaction submission has been disabled for Aurora. " +
+				"To enable it again, remove env variable DISABLE_TX_SUB.",
+			Extras: map[string]interface{}{},
+		}
 	}
 
 	raw, err := getString(r, "tx")

@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/ingest"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ingest"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 func TestOfferActions_Show(t *testing.T) {
@@ -24,7 +24,9 @@ func TestOfferActions_Show(t *testing.T) {
 	ht.Assert.NoError(err)
 
 	ledgerCloseTime := time.Now().Unix()
-	_, err = q.InsertLedger(ctx, xdr.LedgerHeaderHistoryEntry{
+	ht.Assert.NoError(q.Begin(ctx))
+	ledgerBatch := q.NewLedgerBatchInsertBuilder()
+	err = ledgerBatch.Add(xdr.LedgerHeaderHistoryEntry{
 		Header: xdr.LedgerHeader{
 			LedgerSeq: 100,
 			ScpValue: xdr.HcnetValue{
@@ -33,6 +35,8 @@ func TestOfferActions_Show(t *testing.T) {
 		},
 	}, 0, 0, 0, 0, 0)
 	ht.Assert.NoError(err)
+	ht.Assert.NoError(ledgerBatch.Exec(ht.Ctx, q))
+	ht.Assert.NoError(q.Commit())
 
 	issuer := xdr.MustAddress("GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H")
 	nativeAsset := xdr.MustNewNativeAsset()

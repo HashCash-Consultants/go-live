@@ -9,13 +9,13 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/hcnet/go/historyarchive"
-	aurora "github.com/hcnet/go/services/aurora/internal"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/ingest"
-	support "github.com/hcnet/go/support/config"
-	"github.com/hcnet/go/support/db"
-	"github.com/hcnet/go/support/log"
+	"github.com/shantanu-hashcash/go/historyarchive"
+	aurora "github.com/shantanu-hashcash/go/services/aurora/internal"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ingest"
+	support "github.com/shantanu-hashcash/go/support/config"
+	"github.com/shantanu-hashcash/go/support/db"
+	"github.com/shantanu-hashcash/go/support/log"
 )
 
 var ingestCmd = &cobra.Command{
@@ -94,7 +94,7 @@ var ingestVerifyRangeCmd = &cobra.Command{
 			co.SetValue()
 		}
 
-		if err := aurora.ApplyFlags(config, flags, aurora.ApplyOptions{RequireCaptiveCoreConfig: false, AlwaysIngest: true}); err != nil {
+		if err := aurora.ApplyFlags(globalConfig, globalFlags, aurora.ApplyOptions{RequireCaptiveCoreFullConfig: false, AlwaysIngest: true}); err != nil {
 			return err
 		}
 
@@ -111,44 +111,30 @@ var ingestVerifyRangeCmd = &cobra.Command{
 			}()
 		}
 
-		auroraSession, err := db.Open("postgres", config.DatabaseURL)
+		auroraSession, err := db.Open("postgres", globalConfig.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("cannot open Aurora DB: %v", err)
 		}
-		mngr := historyarchive.NewCheckpointManager(config.CheckpointFrequency)
+		mngr := historyarchive.NewCheckpointManager(globalConfig.CheckpointFrequency)
 		if !mngr.IsCheckpoint(ingestVerifyFrom) && ingestVerifyFrom != 1 {
 			return fmt.Errorf("`--from` must be a checkpoint ledger")
 		}
 
 		if ingestVerifyState && !mngr.IsCheckpoint(ingestVerifyTo) {
-			return fmt.Errorf("`--to` must be a checkpoint ledger when `--verify-state` is set.")
+			return fmt.Errorf("`--to` must be a checkpoint ledger when `--verify-state` is set")
 		}
 
 		ingestConfig := ingest.Config{
-			NetworkPassphrase:        config.NetworkPassphrase,
-			HistorySession:           auroraSession,
-			HistoryArchiveURLs:       config.HistoryArchiveURLs,
-			EnableCaptiveCore:        config.EnableCaptiveCoreIngestion,
-			CaptiveCoreBinaryPath:    config.CaptiveCoreBinaryPath,
-			CaptiveCoreConfigUseDB:   config.CaptiveCoreConfigUseDB,
-			RemoteCaptiveCoreURL:     config.RemoteCaptiveCoreURL,
-			CheckpointFrequency:      config.CheckpointFrequency,
-			CaptiveCoreToml:          config.CaptiveCoreToml,
-			CaptiveCoreStoragePath:   config.CaptiveCoreStoragePath,
-			RoundingSlippageFilter:   config.RoundingSlippageFilter,
-			EnableIngestionFiltering: config.EnableIngestionFiltering,
-		}
-
-		if !ingestConfig.EnableCaptiveCore {
-			if config.HcnetCoreDatabaseURL == "" {
-				return fmt.Errorf("flag --%s cannot be empty", aurora.HcnetCoreDBURLFlagName)
-			}
-
-			coreSession, dbErr := db.Open("postgres", config.HcnetCoreDatabaseURL)
-			if dbErr != nil {
-				return fmt.Errorf("cannot open Core DB: %v", dbErr)
-			}
-			ingestConfig.CoreSession = coreSession
+			NetworkPassphrase:      globalConfig.NetworkPassphrase,
+			HistorySession:         auroraSession,
+			HistoryArchiveURLs:     globalConfig.HistoryArchiveURLs,
+			HistoryArchiveCaching:  globalConfig.HistoryArchiveCaching,
+			CaptiveCoreBinaryPath:  globalConfig.CaptiveCoreBinaryPath,
+			CaptiveCoreConfigUseDB: globalConfig.CaptiveCoreConfigUseDB,
+			CheckpointFrequency:    globalConfig.CheckpointFrequency,
+			CaptiveCoreToml:        globalConfig.CaptiveCoreToml,
+			CaptiveCoreStoragePath: globalConfig.CaptiveCoreStoragePath,
+			RoundingSlippageFilter: globalConfig.RoundingSlippageFilter,
 		}
 
 		system, err := ingest.NewSystem(ingestConfig)
@@ -203,11 +189,11 @@ var ingestStressTestCmd = &cobra.Command{
 			co.SetValue()
 		}
 
-		if err := aurora.ApplyFlags(config, flags, aurora.ApplyOptions{RequireCaptiveCoreConfig: false, AlwaysIngest: true}); err != nil {
+		if err := aurora.ApplyFlags(globalConfig, globalFlags, aurora.ApplyOptions{RequireCaptiveCoreFullConfig: false, AlwaysIngest: true}); err != nil {
 			return err
 		}
 
-		auroraSession, err := db.Open("postgres", config.DatabaseURL)
+		auroraSession, err := db.Open("postgres", globalConfig.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("cannot open Aurora DB: %v", err)
 		}
@@ -221,27 +207,13 @@ var ingestStressTestCmd = &cobra.Command{
 		}
 
 		ingestConfig := ingest.Config{
-			NetworkPassphrase:      config.NetworkPassphrase,
+			NetworkPassphrase:      globalConfig.NetworkPassphrase,
 			HistorySession:         auroraSession,
-			HistoryArchiveURLs:     config.HistoryArchiveURLs,
-			EnableCaptiveCore:      config.EnableCaptiveCoreIngestion,
-			RoundingSlippageFilter: config.RoundingSlippageFilter,
-		}
-
-		if config.EnableCaptiveCoreIngestion {
-			ingestConfig.CaptiveCoreBinaryPath = config.CaptiveCoreBinaryPath
-			ingestConfig.RemoteCaptiveCoreURL = config.RemoteCaptiveCoreURL
-			ingestConfig.CaptiveCoreConfigUseDB = config.CaptiveCoreConfigUseDB
-		} else {
-			if config.HcnetCoreDatabaseURL == "" {
-				return fmt.Errorf("flag --%s cannot be empty", aurora.HcnetCoreDBURLFlagName)
-			}
-
-			coreSession, dbErr := db.Open("postgres", config.HcnetCoreDatabaseURL)
-			if dbErr != nil {
-				return fmt.Errorf("cannot open Core DB: %v", dbErr)
-			}
-			ingestConfig.CoreSession = coreSession
+			HistoryArchiveURLs:     globalConfig.HistoryArchiveURLs,
+			HistoryArchiveCaching:  globalConfig.HistoryArchiveCaching,
+			RoundingSlippageFilter: globalConfig.RoundingSlippageFilter,
+			CaptiveCoreBinaryPath:  globalConfig.CaptiveCoreBinaryPath,
+			CaptiveCoreConfigUseDB: globalConfig.CaptiveCoreConfigUseDB,
 		}
 
 		system, err := ingest.NewSystem(ingestConfig)
@@ -267,16 +239,16 @@ var ingestTriggerStateRebuildCmd = &cobra.Command{
 	Short: "updates a database to trigger state rebuild, state will be rebuilt by a running Aurora instance, DO NOT RUN production DB, some endpoints will be unavailable until state is rebuilt",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
-		if err := aurora.ApplyFlags(config, flags, aurora.ApplyOptions{RequireCaptiveCoreConfig: false, AlwaysIngest: true}); err != nil {
+		if err := aurora.ApplyFlags(globalConfig, globalFlags, aurora.ApplyOptions{RequireCaptiveCoreFullConfig: false, AlwaysIngest: true}); err != nil {
 			return err
 		}
 
-		auroraSession, err := db.Open("postgres", config.DatabaseURL)
+		auroraSession, err := db.Open("postgres", globalConfig.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("cannot open Aurora DB: %v", err)
 		}
 
-		historyQ := &history.Q{auroraSession}
+		historyQ := &history.Q{SessionInterface: auroraSession}
 		if err := historyQ.UpdateIngestVersion(ctx, 0); err != nil {
 			return fmt.Errorf("cannot trigger state rebuild: %v", err)
 		}
@@ -291,16 +263,16 @@ var ingestInitGenesisStateCmd = &cobra.Command{
 	Short: "ingests genesis state (ledger 1)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
-		if err := aurora.ApplyFlags(config, flags, aurora.ApplyOptions{RequireCaptiveCoreConfig: false, AlwaysIngest: true}); err != nil {
+		if err := aurora.ApplyFlags(globalConfig, globalFlags, aurora.ApplyOptions{RequireCaptiveCoreFullConfig: false, AlwaysIngest: true}); err != nil {
 			return err
 		}
 
-		auroraSession, err := db.Open("postgres", config.DatabaseURL)
+		auroraSession, err := db.Open("postgres", globalConfig.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("cannot open Aurora DB: %v", err)
 		}
 
-		historyQ := &history.Q{auroraSession}
+		historyQ := &history.Q{SessionInterface: auroraSession}
 
 		lastIngestedLedger, err := historyQ.GetLastLedgerIngestNonBlocking(ctx)
 		if err != nil {
@@ -312,28 +284,13 @@ var ingestInitGenesisStateCmd = &cobra.Command{
 		}
 
 		ingestConfig := ingest.Config{
-			NetworkPassphrase:        config.NetworkPassphrase,
-			HistorySession:           auroraSession,
-			HistoryArchiveURLs:       config.HistoryArchiveURLs,
-			EnableCaptiveCore:        config.EnableCaptiveCoreIngestion,
-			CheckpointFrequency:      config.CheckpointFrequency,
-			RoundingSlippageFilter:   config.RoundingSlippageFilter,
-			EnableIngestionFiltering: config.EnableIngestionFiltering,
-		}
-
-		if config.EnableCaptiveCoreIngestion {
-			ingestConfig.CaptiveCoreBinaryPath = config.CaptiveCoreBinaryPath
-			ingestConfig.CaptiveCoreConfigUseDB = config.CaptiveCoreConfigUseDB
-		} else {
-			if config.HcnetCoreDatabaseURL == "" {
-				return fmt.Errorf("flag --%s cannot be empty", aurora.HcnetCoreDBURLFlagName)
-			}
-
-			coreSession, dbErr := db.Open("postgres", config.HcnetCoreDatabaseURL)
-			if dbErr != nil {
-				return fmt.Errorf("cannot open Core DB: %v", dbErr)
-			}
-			ingestConfig.CoreSession = coreSession
+			NetworkPassphrase:      globalConfig.NetworkPassphrase,
+			HistorySession:         auroraSession,
+			HistoryArchiveURLs:     globalConfig.HistoryArchiveURLs,
+			CheckpointFrequency:    globalConfig.CheckpointFrequency,
+			RoundingSlippageFilter: globalConfig.RoundingSlippageFilter,
+			CaptiveCoreBinaryPath:  globalConfig.CaptiveCoreBinaryPath,
+			CaptiveCoreConfigUseDB: globalConfig.CaptiveCoreConfigUseDB,
 		}
 
 		system, err := ingest.NewSystem(ingestConfig)
@@ -363,16 +320,16 @@ var ingestBuildStateCmd = &cobra.Command{
 			co.SetValue()
 		}
 
-		if err := aurora.ApplyFlags(config, flags, aurora.ApplyOptions{RequireCaptiveCoreConfig: false, AlwaysIngest: true}); err != nil {
+		if err := aurora.ApplyFlags(globalConfig, globalFlags, aurora.ApplyOptions{RequireCaptiveCoreFullConfig: false, AlwaysIngest: true}); err != nil {
 			return err
 		}
 
-		auroraSession, err := db.Open("postgres", config.DatabaseURL)
+		auroraSession, err := db.Open("postgres", globalConfig.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("cannot open Aurora DB: %v", err)
 		}
 
-		historyQ := &history.Q{auroraSession}
+		historyQ := &history.Q{SessionInterface: auroraSession}
 
 		lastIngestedLedger, err := historyQ.GetLastLedgerIngestNonBlocking(context.Background())
 		if err != nil {
@@ -383,38 +340,22 @@ var ingestBuildStateCmd = &cobra.Command{
 			return fmt.Errorf("cannot run on non-empty DB")
 		}
 
-		mngr := historyarchive.NewCheckpointManager(config.CheckpointFrequency)
+		mngr := historyarchive.NewCheckpointManager(globalConfig.CheckpointFrequency)
 		if !mngr.IsCheckpoint(ingestBuildStateSequence) && ingestBuildStateSequence != 1 {
 			return fmt.Errorf("`--sequence` must be a checkpoint ledger")
 		}
 
 		ingestConfig := ingest.Config{
-			NetworkPassphrase:        config.NetworkPassphrase,
-			HistorySession:           auroraSession,
-			HistoryArchiveURLs:       config.HistoryArchiveURLs,
-			EnableCaptiveCore:        config.EnableCaptiveCoreIngestion,
-			CaptiveCoreBinaryPath:    config.CaptiveCoreBinaryPath,
-			CaptiveCoreConfigUseDB:   config.CaptiveCoreConfigUseDB,
-			RemoteCaptiveCoreURL:     config.RemoteCaptiveCoreURL,
-			CheckpointFrequency:      config.CheckpointFrequency,
-			CaptiveCoreToml:          config.CaptiveCoreToml,
-			CaptiveCoreStoragePath:   config.CaptiveCoreStoragePath,
-			RoundingSlippageFilter:   config.RoundingSlippageFilter,
-			EnableIngestionFiltering: config.EnableIngestionFiltering,
-		}
-
-		if !ingestBuildStateSkipChecks {
-			if !ingestConfig.EnableCaptiveCore {
-				if config.HcnetCoreDatabaseURL == "" {
-					return fmt.Errorf("flag --%s cannot be empty", aurora.HcnetCoreDBURLFlagName)
-				}
-
-				coreSession, dbErr := db.Open("postgres", config.HcnetCoreDatabaseURL)
-				if dbErr != nil {
-					return fmt.Errorf("cannot open Core DB: %v", dbErr)
-				}
-				ingestConfig.CoreSession = coreSession
-			}
+			NetworkPassphrase:      globalConfig.NetworkPassphrase,
+			HistorySession:         auroraSession,
+			HistoryArchiveURLs:     globalConfig.HistoryArchiveURLs,
+			HistoryArchiveCaching:  globalConfig.HistoryArchiveCaching,
+			CaptiveCoreBinaryPath:  globalConfig.CaptiveCoreBinaryPath,
+			CaptiveCoreConfigUseDB: globalConfig.CaptiveCoreConfigUseDB,
+			CheckpointFrequency:    globalConfig.CheckpointFrequency,
+			CaptiveCoreToml:        globalConfig.CaptiveCoreToml,
+			CaptiveCoreStoragePath: globalConfig.CaptiveCoreStoragePath,
+			RoundingSlippageFilter: globalConfig.RoundingSlippageFilter,
 		}
 
 		system, err := ingest.NewSystem(ingestConfig)

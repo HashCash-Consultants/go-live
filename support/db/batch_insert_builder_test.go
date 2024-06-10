@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hcnet/go/support/db/dbtest"
+	"github.com/shantanu-hashcash/go/support/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,6 +13,7 @@ import (
 type hungerRow struct {
 	Name        string `db:"name"`
 	HungerLevel string `db:"hunger_level"`
+	JsonValue   string `db:"json_value"`
 }
 
 type invalidHungerRow struct {

@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/hcnet/go/services/aurora/internal/test"
+
+	"github.com/shantanu-hashcash/go/keypair"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
 )
 
 type transactionParticipant struct {
@@ -32,27 +34,38 @@ func TestTransactionParticipantsBatch(t *testing.T) {
 	test.ResetAuroraDB(t, tt.AuroraDB)
 	q := &Q{tt.AuroraSession()}
 
-	batch := q.NewTransactionParticipantsBatchInsertBuilder(0)
+	batch := q.NewTransactionParticipantsBatchInsertBuilder()
+	accountLoader := NewAccountLoader()
 
 	transactionID := int64(1)
 	otherTransactionID := int64(2)
-	accountID := int64(100)
-
+	var addresses []string
 	for i := int64(0); i < 3; i++ {
-		tt.Assert.NoError(batch.Add(tt.Ctx, transactionID, accountID+i))
+		address := keypair.MustRandom().Address()
+		addresses = append(addresses, address)
+		tt.Assert.NoError(batch.Add(transactionID, accountLoader.GetFuture(address)))
 	}
 
-	tt.Assert.NoError(batch.Add(tt.Ctx, otherTransactionID, accountID))
-	tt.Assert.NoError(batch.Exec(tt.Ctx))
+	address := keypair.MustRandom().Address()
+	addresses = append(addresses, address)
+	tt.Assert.NoError(batch.Add(otherTransactionID, accountLoader.GetFuture(address)))
+
+	tt.Assert.NoError(q.Begin(tt.Ctx))
+	tt.Assert.NoError(accountLoader.Exec(tt.Ctx, q))
+	tt.Assert.NoError(batch.Exec(tt.Ctx, q))
+	tt.Assert.NoError(q.Commit())
 
 	participants := getTransactionParticipants(tt, q)
-	tt.Assert.Equal(
-		[]transactionParticipant{
-			transactionParticipant{TransactionID: 1, AccountID: 100},
-			transactionParticipant{TransactionID: 1, AccountID: 101},
-			transactionParticipant{TransactionID: 1, AccountID: 102},
-			transactionParticipant{TransactionID: 2, AccountID: 100},
-		},
-		participants,
-	)
+	expected := []transactionParticipant{
+		{TransactionID: 1},
+		{TransactionID: 1},
+		{TransactionID: 1},
+		{TransactionID: 2},
+	}
+	for i := range expected {
+		val, err := accountLoader.GetNow(addresses[i])
+		tt.Assert.NoError(err)
+		expected[i].AccountID = val
+	}
+	tt.Assert.ElementsMatch(expected, participants)
 }

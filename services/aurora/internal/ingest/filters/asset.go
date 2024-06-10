@@ -3,12 +3,12 @@ package filters
 import (
 	"context"
 
-	"github.com/hcnet/go/ingest"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/ingest/processors"
-	"github.com/hcnet/go/support/collections/set"
-	"github.com/hcnet/go/support/log"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/ingest"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ingest/processors"
+	"github.com/shantanu-hashcash/go/support/collections/set"
+	"github.com/shantanu-hashcash/go/support/log"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 var (
@@ -32,6 +32,10 @@ func NewAssetFilter() AssetFilter {
 	return &assetFilter{
 		canonicalAssetsLookup: set.Set[string]{},
 	}
+}
+
+func (filter *assetFilter) Name() string {
+	return "filters.assetFilter"
 }
 
 func (filter *assetFilter) RefreshAssetFilter(filterConfig *history.AssetFilterConfig) error {

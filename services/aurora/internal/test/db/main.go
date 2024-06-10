@@ -11,7 +11,7 @@ import (
 	// pq enables postgres support
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	db "github.com/hcnet/go/support/db/dbtest"
+	db "github.com/shantanu-hashcash/go/support/db/dbtest"
 )
 
 var (
@@ -29,6 +29,8 @@ func auroraPostgres(t *testing.T) *db.DB {
 	return auroraDB
 }
 
+// TODO, remove refs to internal core db, need to remove scenario tests which require this
+// to seed core db.
 func corePostgres(t *testing.T) *db.DB {
 	if coreDB != nil {
 		return coreDB
@@ -60,6 +62,8 @@ func AuroraROURL() string {
 	return auroraDB.RO_DSN
 }
 
+// TODO, remove refs to core db, need to remove scenario tests which require this
+// to seed core db.
 func HcnetCore(t *testing.T) *sqlx.DB {
 	if coreDBConn != nil {
 		return coreDBConn
@@ -68,6 +72,8 @@ func HcnetCore(t *testing.T) *sqlx.DB {
 	return coreDBConn
 }
 
+// TODO, remove refs to core db, need to remove scenario tests which require this
+// to seed core db.
 func HcnetCoreURL() string {
 	if coreDB == nil {
 		log.Panic(fmt.Errorf("HcnetCore not initialized"))

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	aurora "github.com/hcnet/go/services/aurora/internal"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/log"
+	aurora "github.com/shantanu-hashcash/go/services/aurora/internal"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/log"
 )
 
 var recordMetricsCmd = &cobra.Command{
@@ -19,7 +19,7 @@ var recordMetricsCmd = &cobra.Command{
 	Short: "records `/metrics` on admin port for debuging purposes",
 	Long:  "",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := aurora.ApplyFlags(config, flags, aurora.ApplyOptions{}); err != nil {
+		if err := aurora.ApplyFlags(globalConfig, globalFlags, aurora.ApplyOptions{}); err != nil {
 			return err
 		}
 
@@ -50,7 +50,7 @@ var recordMetricsCmd = &cobra.Command{
 				time.Duration(time.Duration(scrapeIntervalSeconds*(scrapesCount-i))*time.Second),
 			)
 
-			metricsResponse, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", config.AdminPort))
+			metricsResponse, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", globalConfig.AdminPort))
 			if err != nil {
 				return errors.Wrap(err, "Error fetching metrics. Is admin server running?")
 			}

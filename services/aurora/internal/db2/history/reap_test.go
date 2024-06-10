@@ -3,10 +3,10 @@ package history_test
 import (
 	"testing"
 
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/ledger"
-	"github.com/hcnet/go/services/aurora/internal/reap"
-	"github.com/hcnet/go/services/aurora/internal/test"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ledger"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/reap"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
 )
 
 func TestReapLookupTables(t *testing.T) {
@@ -17,7 +17,7 @@ func TestReapLookupTables(t *testing.T) {
 
 	db := tt.AuroraSession()
 
-	sys := reap.New(0, db, ledgerState)
+	sys := reap.New(0, 0, db, ledgerState)
 
 	var (
 		prevLedgers, curLedgers                     int
@@ -43,12 +43,13 @@ func TestReapLookupTables(t *testing.T) {
 
 	ledgerState.SetStatus(tt.LoadLedgerStatus())
 	sys.RetentionCount = 1
+	sys.RetentionBatch = 50
 	err := sys.DeleteUnretainedHistory(tt.Ctx)
 	tt.Require.NoError(err)
 
 	q := &history.Q{tt.AuroraSession()}
 
-	err = q.Begin()
+	err = q.Begin(tt.Ctx)
 	tt.Require.NoError(err)
 
 	deletedCount, newOffsets, err := q.ReapLookupTables(tt.Ctx, nil)

@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"strings"
 
-	"github.com/hcnet/go/historyarchive"
-	"github.com/hcnet/go/ingest"
-	"github.com/hcnet/go/support/log"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/historyarchive"
+	"github.com/shantanu-hashcash/go/ingest"
+	"github.com/shantanu-hashcash/go/support/log"
+	"github.com/shantanu-hashcash/go/support/storage"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // This program will dump all the offers from a history archive checkpoint.
@@ -109,16 +109,20 @@ func archive(testnet bool) (*historyarchive.Archive, error) {
 	if testnet {
 		return historyarchive.Connect(
 			"https://history.hcnet.org/prd/core-testnet/core_testnet_001",
-			historyarchive.ConnectOptions{
-				UserAgent: "dump-orderbook",
+			historyarchive.ArchiveOptions{
+				ConnectOptions: storage.ConnectOptions{
+					UserAgent: "dump-orderbook",
+				},
 			},
 		)
 	}
 
 	return historyarchive.Connect(
-		fmt.Sprintf("https://history.hcnet.org/prd/core-live/core_live_001/"),
-		historyarchive.ConnectOptions{
-			UserAgent: "dump-orderbook",
+		"https://history.hcnet.org/prd/core-live/core_live_001/",
+		historyarchive.ArchiveOptions{
+			ConnectOptions: storage.ConnectOptions{
+				UserAgent: "dump-orderbook",
+			},
 		},
 	)
 }

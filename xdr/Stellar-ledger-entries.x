@@ -3,17 +3,16 @@
 // of this distribution or at http://www.apache.org/licenses/LICENSE-2.0
 
 %#include "xdr/Hcnet-types.h"
+%#include "xdr/Hcnet-contract.h"
+%#include "xdr/Hcnet-contract-config-setting.h"
 
 namespace hcnet
 {
 
-typedef PublicKey AccountID;
 typedef opaque Thresholds[4];
 typedef string string32<32>;
 typedef string string64<64>;
 typedef int64 SequenceNumber;
-typedef uint64 TimePoint;
-typedef uint64 Duration;
 typedef opaque DataValue<64>;
 typedef Hash PoolID; // SHA256(LiquidityPoolParameters)
 
@@ -98,7 +97,11 @@ enum LedgerEntryType
     OFFER = 2,
     DATA = 3,
     CLAIMABLE_BALANCE = 4,
-    LIQUIDITY_POOL = 5
+    LIQUIDITY_POOL = 5,
+    CONTRACT_DATA = 6,
+    CONTRACT_CODE = 7,
+    CONFIG_SETTING = 8,
+    TTL = 9
 };
 
 struct Signer
@@ -491,6 +494,57 @@ struct LiquidityPoolEntry
     body;
 };
 
+enum ContractDataDurability {
+    TEMPORARY = 0,
+    PERSISTENT = 1
+};
+
+struct ContractDataEntry {
+    ExtensionPoint ext;
+
+    SCAddress contract;
+    SCVal key;
+    ContractDataDurability durability;
+    SCVal val;
+};
+
+struct ContractCodeCostInputs {
+    ExtensionPoint ext;
+    uint32 nInstructions;
+    uint32 nFunctions;
+    uint32 nGlobals;
+    uint32 nTableEntries;
+    uint32 nTypes;
+    uint32 nDataSegments;
+    uint32 nElemSegments;
+    uint32 nImports;
+    uint32 nExports;
+    uint32 nDataSegmentBytes;
+};
+
+struct ContractCodeEntry {
+    union switch (int v)
+    {
+        case 0:
+            void;
+        case 1:
+            struct
+            {
+                ExtensionPoint ext;
+                ContractCodeCostInputs costInputs;
+            } v1;
+    } ext;
+
+    Hash hash;
+    opaque code<>;
+};
+
+struct TTLEntry {
+    // Hash of the LedgerKey that is associated with this TTLEntry
+    Hash keyHash;
+    uint32 liveUntilLedgerSeq;
+};
+
 struct LedgerEntryExtensionV1
 {
     SponsorshipDescriptor sponsoringID;
@@ -521,6 +575,14 @@ struct LedgerEntry
         ClaimableBalanceEntry claimableBalance;
     case LIQUIDITY_POOL:
         LiquidityPoolEntry liquidityPool;
+    case CONTRACT_DATA:
+        ContractDataEntry contractData;
+    case CONTRACT_CODE:
+        ContractCodeEntry contractCode;
+    case CONFIG_SETTING:
+        ConfigSettingEntry configSetting;
+    case TTL:
+        TTLEntry ttl;
     }
     data;
 
@@ -575,6 +637,29 @@ case LIQUIDITY_POOL:
     {
         PoolID liquidityPoolID;
     } liquidityPool;
+case CONTRACT_DATA:
+    struct
+    {
+        SCAddress contract;
+        SCVal key;
+        ContractDataDurability durability;
+    } contractData;
+case CONTRACT_CODE:
+    struct
+    {
+        Hash hash;
+    } contractCode;
+case CONFIG_SETTING:
+    struct
+    {
+        ConfigSettingID configSettingID;
+    } configSetting;
+case TTL:
+    struct
+    {
+        // Hash of the LedgerKey that is associated with this TTLEntry
+        Hash keyHash;
+    } ttl;
 };
 
 // list of all envelope types used in the application
@@ -589,6 +674,8 @@ enum EnvelopeType
     ENVELOPE_TYPE_SCPVALUE = 4,
     ENVELOPE_TYPE_TX_FEE_BUMP = 5,
     ENVELOPE_TYPE_OP_ID = 6,
-    ENVELOPE_TYPE_POOL_REVOKE_OP_ID = 7
+    ENVELOPE_TYPE_POOL_REVOKE_OP_ID = 7,
+    ENVELOPE_TYPE_CONTRACT_ID = 8,
+    ENVELOPE_TYPE_SOROBAN_AUTHORIZATION = 9
 };
 }

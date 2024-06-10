@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hcnet/go/services/aurora/internal/db2"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/test/integration"
-	strtime "github.com/hcnet/go/support/time"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test/integration"
+	strtime "github.com/shantanu-hashcash/go/support/time"
+	"github.com/shantanu-hashcash/go/xdr"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/guregu/null"
@@ -272,14 +272,14 @@ func TestTradeAggregations(t *testing.T) {
 	for _, scenario := range scenarios {
 		t.Run(scenario.name, func(t *testing.T) {
 			// Run each in a txn so the ids don't conflict.
-			assert.NoError(t, historyQ.Begin())
+			assert.NoError(t, historyQ.Begin(ctx))
 			defer func() {
 				assert.NoError(t, historyQ.Rollback())
 			}()
 
-			batch := historyQ.NewTradeBatchInsertBuilder(1000)
-			batch.Add(ctx, scenario.trades...)
-			assert.NoError(t, batch.Exec(ctx))
+			batch := historyQ.NewTradeBatchInsertBuilder()
+			assert.NoError(t, batch.Add(scenario.trades...))
+			assert.NoError(t, batch.Exec(ctx, historyQ))
 
 			// Rebuild the aggregates.
 			for _, trade := range scenario.trades {

@@ -5,18 +5,18 @@ import (
 	"encoding/base64"
 	"encoding/csv"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"runtime"
 	"strconv"
 	"time"
 
-	"github.com/hcnet/go/historyarchive"
-	"github.com/hcnet/go/ingest"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/log"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/historyarchive"
+	"github.com/shantanu-hashcash/go/ingest"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/log"
+	"github.com/shantanu-hashcash/go/support/storage"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // csvMap maintains a mapping from ledger entry type to csv file
@@ -307,16 +307,20 @@ func archive(testnet bool) (*historyarchive.Archive, error) {
 	if testnet {
 		return historyarchive.Connect(
 			"https://history.hcnet.org/prd/core-testnet/core_testnet_001",
-			historyarchive.ConnectOptions{
-				UserAgent: "dump-ledger-state",
+			historyarchive.ArchiveOptions{
+				ConnectOptions: storage.ConnectOptions{
+					UserAgent: "dump-ledger-state",
+				},
 			},
 		)
 	}
 
 	return historyarchive.Connect(
-		fmt.Sprintf("https://history.hcnet.org/prd/core-live/core_live_001/"),
-		historyarchive.ConnectOptions{
-			UserAgent: "dump-ledger-state",
+		"https://history.hcnet.org/prd/core-live/core_live_001/",
+		historyarchive.ArchiveOptions{
+			ConnectOptions: storage.ConnectOptions{
+				UserAgent: "dump-ledger-state",
+			},
 		},
 	)
 }

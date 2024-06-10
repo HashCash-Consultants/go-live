@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"testing"
 
-	hProblem "github.com/hcnet/go/services/aurora/internal/render/problem"
-	"github.com/hcnet/go/support/render/problem"
-	"github.com/hcnet/go/support/test"
+	hProblem "github.com/shantanu-hashcash/go/services/aurora/internal/render/problem"
+	"github.com/shantanu-hashcash/go/support/render/problem"
+	"github.com/shantanu-hashcash/go/support/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -101,7 +101,7 @@ func (suite *StreamTestSuite) TestStream_ErrRegisterError() {
 	suite.stream.Send(Event{})
 	suite.stream.Err(context.DeadlineExceeded)
 	suite.checkHeadersAndPreamble()
-	assert.Contains(suite.T(), suite.w.Body.String(), "event: error\ndata: problem: timeout\n\n")
+	assert.Contains(suite.T(), suite.w.Body.String(), "event: error\ndata: problem: timeout")
 	assert.True(suite.T(), suite.stream.IsDone())
 }
 
@@ -116,7 +116,7 @@ func (suite *StreamTestSuite) TestStream_ErrNoRows() {
 	suite.stream.Send(Event{})
 	suite.stream.Err(sql.ErrNoRows)
 	suite.checkHeadersAndPreamble()
-	assert.Contains(suite.T(), suite.w.Body.String(), "event: error\ndata: problem: not_found\n\n")
+	assert.Contains(suite.T(), suite.w.Body.String(), "event: error\ndata: problem: not_found")
 	assert.True(suite.T(), suite.stream.IsDone())
 }
 

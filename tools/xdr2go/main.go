@@ -5,8 +5,8 @@ import (
 	"go/format"
 
 	"github.com/spf13/cobra"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 var (
@@ -37,7 +37,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	err := xdr.SafeUnmarshalBase64(args[0], object)
 	if err != nil {
-		return errors.Wrap(err, "Error unmarshalling XDR stucture.")
+		return errors.Wrap(err, "Error unmarshaling XDR stucture.")
 	}
 
 	source := fmt.Sprintf("%#v\n", object)

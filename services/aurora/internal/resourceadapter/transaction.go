@@ -9,12 +9,12 @@ import (
 
 	"github.com/guregu/null"
 
-	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
-	"github.com/hcnet/go/xdr"
+	auroraContext "github.com/shantanu-hashcash/go/services/aurora/internal/context"
+	"github.com/shantanu-hashcash/go/xdr"
 
-	protocol "github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/support/render/hal"
+	protocol "github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/support/render/hal"
 )
 
 // Populate fills out the details
@@ -23,6 +23,7 @@ func PopulateTransaction(
 	transactionHash string,
 	dest *protocol.Transaction,
 	row history.Transaction,
+	skipTxMeta bool,
 ) error {
 	dest.ID = transactionHash
 	dest.PT = row.PagingToken()
@@ -43,7 +44,11 @@ func PopulateTransaction(
 	dest.OperationCount = row.OperationCount
 	dest.EnvelopeXdr = row.TxEnvelope
 	dest.ResultXdr = row.TxResult
-	dest.ResultMetaXdr = row.TxMeta
+	if skipTxMeta {
+		dest.ResultMetaXdr = ""
+	} else {
+		dest.ResultMetaXdr = row.TxMeta
+	}
 	dest.FeeMetaXdr = row.TxFeeMeta
 	dest.MemoType = row.MemoType
 	dest.Memo = row.Memo.String

@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/hcnet/go/historyarchive"
-	"github.com/hcnet/go/ingest/ledgerbackend"
-	"github.com/hcnet/go/network"
-	"github.com/hcnet/go/xdr"
+	"github.com/shantanu-hashcash/go/historyarchive"
+	"github.com/shantanu-hashcash/go/ingest/ledgerbackend"
+	"github.com/shantanu-hashcash/go/network"
+	"github.com/shantanu-hashcash/go/support/storage"
+	"github.com/shantanu-hashcash/go/xdr"
 )
 
 // Example_ledgerentrieshistoryarchive demonstrates how to stream all ledger
@@ -18,7 +19,11 @@ func Example_ledgerentrieshistoryarchive() {
 
 	archive, err := historyarchive.Connect(
 		archiveURL,
-		historyarchive.ConnectOptions{Context: context.TODO()},
+		historyarchive.ArchiveOptions{
+			ConnectOptions: storage.ConnectOptions{
+				Context: context.TODO(),
+			},
+		},
 	)
 	if err != nil {
 		panic(err)

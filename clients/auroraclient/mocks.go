@@ -3,10 +3,10 @@ package auroraclient
 import (
 	"context"
 
-	hProtocol "github.com/hcnet/go/protocols/aurora"
-	"github.com/hcnet/go/protocols/aurora/effects"
-	"github.com/hcnet/go/protocols/aurora/operations"
-	"github.com/hcnet/go/txnbuild"
+	hProtocol "github.com/shantanu-hashcash/go/protocols/aurora"
+	"github.com/shantanu-hashcash/go/protocols/aurora/effects"
+	"github.com/shantanu-hashcash/go/protocols/aurora/operations"
+	"github.com/shantanu-hashcash/go/txnbuild"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -119,6 +119,36 @@ func (m *MockClient) SubmitFeeBumpTransactionWithOptions(transaction *txnbuild.F
 func (m *MockClient) SubmitTransactionWithOptions(transaction *txnbuild.Transaction, opts SubmitTxOpts) (hProtocol.Transaction, error) {
 	a := m.Called(transaction, opts)
 	return a.Get(0).(hProtocol.Transaction), a.Error(1)
+}
+
+// AsyncSubmitTransactionXDR is a mocking method
+func (m *MockClient) AsyncSubmitTransactionXDR(transactionXdr string) (hProtocol.AsyncTransactionSubmissionResponse, error) {
+	a := m.Called(transactionXdr)
+	return a.Get(0).(hProtocol.AsyncTransactionSubmissionResponse), a.Error(1)
+}
+
+// AsyncSubmitFeeBumpTransaction is a mocking method
+func (m *MockClient) AsyncSubmitFeeBumpTransaction(transaction *txnbuild.FeeBumpTransaction) (hProtocol.AsyncTransactionSubmissionResponse, error) {
+	a := m.Called(transaction)
+	return a.Get(0).(hProtocol.AsyncTransactionSubmissionResponse), a.Error(1)
+}
+
+// AsyncSubmitTransaction is a mocking method
+func (m *MockClient) AsyncSubmitTransaction(transaction *txnbuild.Transaction) (hProtocol.AsyncTransactionSubmissionResponse, error) {
+	a := m.Called(transaction)
+	return a.Get(0).(hProtocol.AsyncTransactionSubmissionResponse), a.Error(1)
+}
+
+// AsyncSubmitFeeBumpTransactionWithOptions is a mocking method
+func (m *MockClient) AsyncSubmitFeeBumpTransactionWithOptions(transaction *txnbuild.FeeBumpTransaction, opts SubmitTxOpts) (hProtocol.AsyncTransactionSubmissionResponse, error) {
+	a := m.Called(transaction, opts)
+	return a.Get(0).(hProtocol.AsyncTransactionSubmissionResponse), a.Error(1)
+}
+
+// AsyncSubmitTransactionWithOptions is a mocking method
+func (m *MockClient) AsyncSubmitTransactionWithOptions(transaction *txnbuild.Transaction, opts SubmitTxOpts) (hProtocol.AsyncTransactionSubmissionResponse, error) {
+	a := m.Called(transaction, opts)
+	return a.Get(0).(hProtocol.AsyncTransactionSubmissionResponse), a.Error(1)
 }
 
 // Transactions is a mocking method

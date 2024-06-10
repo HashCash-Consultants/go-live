@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/test"
-	tdb "github.com/hcnet/go/services/aurora/internal/test/db"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
+	tdb "github.com/shantanu-hashcash/go/services/aurora/internal/test/db"
 )
 
 type HTTPT struct {
@@ -104,6 +104,7 @@ func (ht *HTTPT) Post(
 // setting the retention count to the provided number.
 func (ht *HTTPT) ReapHistory(retention uint) {
 	ht.App.reaper.RetentionCount = retention
+	ht.App.reaper.RetentionBatch = 50_000
 	ht.App.reaper.HistoryQ = &history.Q{ht.AuroraSession()}
 	err := ht.App.DeleteUnretainedHistory(context.Background())
 	ht.Require.NoError(err)

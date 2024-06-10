@@ -3,8 +3,8 @@ package reap
 import (
 	"testing"
 
-	"github.com/hcnet/go/services/aurora/internal/ledger"
-	"github.com/hcnet/go/services/aurora/internal/test"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ledger"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/test"
 )
 
 func TestDeleteUnretainedHistory(t *testing.T) {
@@ -15,7 +15,7 @@ func TestDeleteUnretainedHistory(t *testing.T) {
 
 	db := tt.AuroraSession()
 
-	sys := New(0, db, ledgerState)
+	sys := New(0, 50, db, ledgerState)
 
 	// Disable sleeps for this.
 	sleep = 0

@@ -4,14 +4,14 @@ import (
 	"context"
 	"net/http"
 
-	auroraContext "github.com/hcnet/go/services/aurora/internal/context"
-	"github.com/hcnet/go/services/aurora/internal/db2"
-	"github.com/hcnet/go/services/aurora/internal/db2/history"
-	"github.com/hcnet/go/services/aurora/internal/ledger"
-	"github.com/hcnet/go/services/aurora/internal/resourceadapter"
-	"github.com/hcnet/go/support/errors"
-	"github.com/hcnet/go/support/render/hal"
-	"github.com/hcnet/go/support/render/problem"
+	auroraContext "github.com/shantanu-hashcash/go/services/aurora/internal/context"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/db2/history"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/ledger"
+	"github.com/shantanu-hashcash/go/services/aurora/internal/resourceadapter"
+	"github.com/shantanu-hashcash/go/support/errors"
+	"github.com/shantanu-hashcash/go/support/render/hal"
+	"github.com/shantanu-hashcash/go/support/render/problem"
 )
 
 // EffectsQuery query struct for effects end-points
@@ -95,25 +95,20 @@ func (handler GetEffectsHandler) GetResourcePage(w HeaderWriter, r *http.Request
 }
 
 func loadEffectRecords(ctx context.Context, hq *history.Q, qp EffectsQuery, pq db2.PageQuery) ([]history.Effect, error) {
-	effects := hq.Effects()
-
 	switch {
 	case qp.AccountID != "":
-		effects.ForAccount(ctx, qp.AccountID)
+		return hq.EffectsForAccount(ctx, qp.AccountID, pq)
 	case qp.LiquidityPoolID != "":
-		effects.ForLiquidityPool(ctx, pq, qp.LiquidityPoolID)
+		return hq.EffectsForLiquidityPool(ctx, qp.LiquidityPoolID, pq)
 	case qp.OperationID > 0:
-		effects.ForOperation(int64(qp.OperationID))
+		return hq.EffectsForOperation(ctx, int64(qp.OperationID), pq)
 	case qp.LedgerID > 0:
-		effects.ForLedger(ctx, int32(qp.LedgerID))
+		return hq.EffectsForLedger(ctx, int32(qp.LedgerID), pq)
 	case qp.TxHash != "":
-		effects.ForTransaction(ctx, qp.TxHash)
+		return hq.EffectsForTransaction(ctx, qp.TxHash, pq)
+	default:
+		return hq.Effects(ctx, pq)
 	}
-
-	var result []history.Effect
-	err := effects.Page(pq).Select(ctx, &result)
-
-	return result, err
 }
 
 func loadEffectLedgers(ctx context.Context, hq *history.Q, effects []history.Effect) (map[int32]history.Ledger, error) {

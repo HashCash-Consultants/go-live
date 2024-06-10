@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hcnet/go/keypair"
-	"github.com/hcnet/go/network"
+	"github.com/shantanu-hashcash/go/keypair"
+	"github.com/shantanu-hashcash/go/network"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,7 +34,7 @@ func TestCreateClaimableBalanceRoundTrip(t *testing.T) {
 		},
 	}
 
-	testOperationsMarshallingRoundtrip(t, []Operation{createNativeBalance, createAssetBalance}, false)
+	testOperationsMarshalingRoundtrip(t, []Operation{createNativeBalance, createAssetBalance}, false)
 
 	createNativeBalanceWithMuxedAcounts := &CreateClaimableBalance{
 		SourceAccount: "MA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVAAAAAAAAAAAAAJLK",
@@ -46,7 +46,7 @@ func TestCreateClaimableBalanceRoundTrip(t *testing.T) {
 		},
 	}
 
-	testOperationsMarshallingRoundtrip(t, []Operation{createNativeBalanceWithMuxedAcounts}, true)
+	testOperationsMarshalingRoundtrip(t, []Operation{createNativeBalanceWithMuxedAcounts}, true)
 }
 
 func TestClaimableBalanceID(t *testing.T) {
